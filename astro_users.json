@@ -1,0 +1,14 @@
+{
+  "1039046043": {
+    "sign": "scorpio",
+    "daily_enabled": true,
+    "time": "08:00",
+    "tz": "Europe/Madrid"
+  },
+  "6566037827": {
+    "sign": "aries",
+    "daily_enabled": false,
+    "time": "08:00",
+    "tz": "Europe/Madrid"
+  }
+}

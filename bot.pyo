@@ -1,0 +1,122 @@
+7882595325:AAHyrxDf_4nDiy_8LspmkVJHHL-KoRKzhbccat > bot.py << 'PY'
+import os, logging
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from generator import generate, STYLES, SIGNS
+
+logging.basicConfig(level=logging.INFO)
+VERSION = "Astro v2"
+
+TOKEN = "7882595325:AAHyrxDf_4nDiy_8LspmkVJHHL-KoRKzhbc"  # ← замени на свой токен!
+
+user_prefs = {}  # user_id -> {"sign":"aries","style":"classic","lang":"ru"}
+
+def kb_signs():
+    rows = [
+        [("♈","aries"),("♉","taurus"),("♊","gemini")],
+        [("♋","cancer"),("♌","leo"),("♍","virgo")],
+        [("♎","libra"),("♏","scorpio"),("♐","sagittarius")],
+        [("♑","capricorn"),("♒","aquarius"),("♓","pisces")],
+    ]
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(txt, callback_data=f"set_sign:{val}") for txt,val in row] for row in rows
+    ])
+
+def kb_styles():
+    mapping = [("Классический","classic"),("Юморной","humor"),("Мистический","mystic"),("Мотивирующий","motivation")]
+    return InlineKeyboardMarkup([[InlineKeyboardButton(n, callback_data=f"set_style:{k}")] for n,k in mapping])
+
+def fmt(h):
+    return (
+        f"*{h.get('title','')}* · настроение: _{h.get('mood','')}_\n"
+        f"💖 Любовь: {h.get('love','')}\n"
+        f"💼 Работа: {h.get('work','')}\n"
+        f"💰 Деньги: {h.get('money','')}\n"
+        f"🌿 Здоровье: {h.get('health','')}\n"
+        f"🎯 Совет: {h.get('advice','')}\n"
+        f"#️⃣ Число дня: {h.get('lucky_number','?')}   🎨 Цвет: {h.get('lucky_color','?')}\n"
+        f"🎵 Трек дня: {h['song'].get('title','')} — {h['song'].get('url','')}\n"
+        f"_{VERSION}_"
+    )
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"pong {VERSION}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    user_prefs.setdefault(uid, {"sign":"aries","style":"classic","lang":"ru"})
+    await update.message.reply_text(
+        f"Привет! Я астробот 💫 ({VERSION})\nВыбери свой знак:",
+        reply_markup=kb_signs()
+    )
+
+async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    prefs = user_prefs.setdefault(uid, {"sign":"aries","style":"classic","lang":"ru"})
+    logging.info(f"[{VERSION}] today for uid={uid} sign={prefs['sign']} style={prefs['style']} lang={prefs['lang']}")
+    h = generate(prefs["sign"], prefs["style"], prefs["lang"])
+    await update.message.reply_markdown(fmt(h))
+
+async def style_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выбери тональность:", reply_markup=kb_styles())
+
+async def lang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    lang = (context.args[0] if context.args else "ru").lower()
+    if lang not in ("ru","en","es"): lang = "ru"
+    user_prefs.setdefault(uid, {"sign":"aries","style":"classic","lang":"ru"})
+    user_prefs[uid]["lang"] = lang
+    await update.message.reply_text(f"Язык сохранён: {lang.upper()}")
+
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    txt = (update.message.text or "").strip().lower()
+    logging.info(f"[{VERSION}] text from uid={uid}: {txt!r}")
+    if txt in SIGNS:
+        prefs = user_prefs.setdefault(uid, {"sign":"aries","style":"classic","lang":"ru"})
+        prefs["sign"] = txt
+        h = generate(txt, prefs["style"], prefs["lang"])
+        await update.message.reply_markdown(fmt(h))
+    else:
+        await update.message.reply_text(
+            "Напиши знак на английском (например, *leo*, *aries*) или нажми /start",
+            parse_mode="Markdown"
+        )
+
+async def on_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
+    data = q.data or ""
+    prefs = user_prefs.setdefault(uid, {"sign":"aries","style":"classic","lang":"ru"})
+    logging.info(f"[{VERSION}] callback: {data}")
+    if data.startswith("set_sign:"):
+        sign = data.split(":",1)[1]
+        if sign in SIGNS:
+            prefs["sign"] = sign
+            await q.edit_message_text(f"Знак сохранён: {sign.capitalize()}\nТеперь выбери тон:", reply_markup=kb_styles())
+        else:
+            await q.edit_message_text("Неизвестный знак. Попробуй ещё раз.")
+    elif data.startswith("set_style:"):
+        style = data.split(":",1)[1]
+        if style in STYLES:
+            prefs["style"] = style
+            await q.edit_message_text(f"Тональность сохранена: {STYLES[style]}\nНажми /today для прогноза на сегодня.")
+        else:
+            await q.edit_message_text("Неизвестный стиль.")
+
+def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("ping", ping))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("today", today))
+    app.add_handler(CommandHandler("style", style_cmd))
+    app.add_handler(CommandHandler("lang", lang_cmd))  # /lang ru | en | es
+    app.add_handler(CallbackQueryHandler(on_cb))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
+PY
+

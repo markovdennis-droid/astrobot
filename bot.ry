@@ -1,0 +1,260 @@
+# bot.py
+# -*- coding: utf-8 -*-
+"""
+ASTROBOT — стабильная версия (aiogram v2)
+✅ /start — выбор знака
+✅ 📝 Гороскоп на сегодня — работает с любым текстом и эмодзи
+✅ 🔮 Таро дня — однократный выбор
+✅ 🔔 Ежедневные уведомления — выбор времени (06–10)
+✅ SQLite — с авто-добавлением колонок
+"""
+
+import asyncio
+import contextlib
+import datetime as dt
+import os
+import random
+import secrets
+import sqlite3
+import textwrap
+from typing import Dict, Tuple, Optional, Set, Callable, Any
+
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+
+# === ENV & BOT ===============================================================
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+TZ = os.getenv("TZ", "Europe/Madrid")
+os.environ["TZ"] = TZ
+if not BOT_TOKEN or len(BOT_TOKEN) < 20:
+    raise SystemExit("❌ BOT_TOKEN пуст или некорректен")
+
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+dp = Dispatcher(bot)
+
+# === DATABASE ================================================================
+DB_PATH = os.path.join(os.path.dirname(__file__), "astrobot.db")
+
+def db_connect(): return sqlite3.connect(DB_PATH)
+
+def db_init():
+    with db_connect() as cn:
+        cn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, sign TEXT)")
+        for col, ddl, default in [
+            ("daily_enabled", "INTEGER DEFAULT 0", "0"),
+            ("daily_hour", "INTEGER DEFAULT 9", "9"),
+            ("daily_minute", "INTEGER DEFAULT 0", "0"),
+            ("last_sent", "DATE", "NULL"),
+        ]:
+            cur = cn.execute(f"PRAGMA table_info(users)")
+            names = [r[1] for r in cur.fetchall()]
+            if col not in names:
+                cn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+                if default != "NULL":
+                    cn.execute(f"UPDATE users SET {col}={default}")
+        cn.commit()
+
+db_init()
+
+def get_user(uid: int):
+    with db_connect() as cn:
+        row = cn.execute("SELECT user_id, sign, daily_enabled, daily_hour, daily_minute, last_sent FROM users WHERE user_id=?", (uid,)).fetchone()
+        return row
+
+def upsert_user(uid: int):
+    with db_connect() as cn:
+        cn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
+        cn.commit()
+
+def set_sign(uid: int, sign: str):
+    with db_connect() as cn:
+        cn.execute("INSERT INTO users (user_id, sign) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET sign=excluded.sign", (uid, sign))
+        cn.commit()
+
+def set_daily(uid: int, en: bool):
+    with db_connect() as cn:
+        cn.execute("UPDATE users SET daily_enabled=? WHERE user_id=?", (1 if en else 0, uid))
+        cn.commit()
+
+def set_time(uid: int, h: int, m: int):
+    with db_connect() as cn:
+        cn.execute("UPDATE users SET daily_hour=?, daily_minute=? WHERE user_id=?", (h, m, uid))
+        cn.commit()
+
+def set_last_sent_today(uid: int, today: str):
+    with db_connect() as cn:
+        cn.execute("UPDATE users SET last_sent=? WHERE user_id=?", (today, uid))
+        cn.commit()
+
+def get_due_users(now: dt.datetime):
+    with db_connect() as cn:
+        today = now.date().isoformat()
+        cur = cn.execute("""SELECT user_id, sign FROM users
+                            WHERE daily_enabled=1 AND daily_hour=? AND daily_minute=? 
+                            AND (last_sent IS NULL OR last_sent<>?) AND sign IS NOT NULL""",
+                         (now.hour, now.minute, today))
+        return cur.fetchall()
+
+# === UI ======================================================================
+SIGNS = [
+    ("♈ Овен", "aries"), ("♉ Телец", "taurus"), ("♊ Близнецы", "gemini"),
+    ("♋ Рак", "cancer"), ("♌ Лев", "leo"), ("♍ Дева", "virgo"),
+    ("♎ Весы", "libra"), ("♏ Скорпион", "scorpio"), ("♐ Стрелец", "sagittarius"),
+    ("♑ Козерог", "capricorn"), ("♒ Водолей", "aquarius"), ("♓ Рыбы", "pisces")
+]
+SIGN_RU = {code: name for name, code in SIGNS}
+
+def kb_signs():
+    kb = InlineKeyboardMarkup(row_width=3)
+    kb.add(*[InlineKeyboardButton(text=t, callback_data=f"sign|{c}") for t, c in SIGNS])
+    return kb
+
+def kb_main():
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(KeyboardButton("📝 Гороскоп на сегодня"), KeyboardButton("🔮 Таро дня"))
+    kb.add(KeyboardButton("♻️ Сменить знак"))
+    kb.add(KeyboardButton("🔔 Включить ежедневные"), KeyboardButton("🚫 Выключить ежедневные"))
+    kb.add(KeyboardButton("⏰ Задать время"))
+    return kb
+
+def kb_time_picker():
+    kb = InlineKeyboardMarkup(row_width=3)
+    for t in ["06:00", "07:00", "08:00", "09:00", "10:00"]:
+        kb.insert(InlineKeyboardButton(t, callback_data=f"time|{t}"))
+    return kb
+
+# === TAROT ===================================================================
+TAROT_SESSIONS: Dict[Tuple[int, str], bool] = {}
+TAROT = {
+    "1": "🌞 <b>Солнце</b> — радость и успех.",
+    "2": "💖 <b>Влюблённые</b> — гармония и выбор сердцем.",
+    "3": "🌈 <b>Мир</b> — завершение и внутренняя целостность."
+}
+
+def tarot_keyboard(sid: str):
+    kb = InlineKeyboardMarkup(row_width=3)
+    for i in ["1", "2", "3"]:
+        kb.insert(InlineKeyboardButton(f"🃏 Карта {i}", callback_data=f"tarot|{sid}|{i}"))
+    return kb
+
+@dp.callback_query_handler(lambda c: c.data.startswith("tarot|"))
+async def tarot_pick(c: types.CallbackQuery):
+    _, sid, cid = c.data.split("|")
+    key = (c.message.chat.id, sid)
+    if not TAROT_SESSIONS.get(key):
+        return await c.answer("Эта раскладка уже закрыта.", show_alert=True)
+    TAROT_SESSIONS[key] = False
+    await c.answer("Карта выбрана!")
+    await bot.edit_message_text(f"🔮 <b>Таро дня</b>\n\nТы выбрал <b>Карту {cid}</b>.\n\n{TAROT[cid]}",
+                                c.message.chat.id, c.message.message_id)
+
+# === HOROSCOPE ===============================================================
+QUOTES = [
+    "«Удача любит смелых.»", "«Терпение — твой козырь.»",
+    "«Фокусируйся на главном.»", "«Слова обладают силой.»"
+]
+COLORS = ["красный","синий","зелёный","золотой","фиолетовый","бирюзовый","янтарный","алый","небесный","изумрудный"]
+
+def generate_horoscope(sign: str):
+    rnd = random.Random(hash((sign, dt.date.today().toordinal())))
+    return textwrap.dedent(f"""
+    <b>{SIGN_RU.get(sign, sign)}</b> — гороскоп на сегодня
+
+    💖 Любовь: {rnd.choice(['приятный сюрприз','новое знакомство','гармония'])}
+    💼 Работа: {rnd.choice(['успешные переговоры','вдохновение','чёткий план'])}
+    💰 Деньги: {rnd.choice(['приятный бонус','умеренные траты','удачная сделка'])}
+    🌿 Здоровье: {rnd.choice(['энергия','спокойствие','хороший сон'])}
+    🎯 Совет: {rnd.choice(['будь спокоен','доверься интуиции','наслаждайся моментом'])}
+    🎨 Цвет: {rnd.choice(COLORS)}
+
+    {rnd.choice(QUOTES)}
+    """).strip()
+
+# === HANDLERS ================================================================
+@dp.message_handler(commands=["start"])
+async def start(m: types.Message):
+    upsert_user(m.from_user.id)
+    await m.answer("✨ Привет! Я <b>AstroBot</b>.\nВыбери свой знак зодиака:", reply_markup=kb_signs())
+
+@dp.callback_query_handler(lambda c: c.data.startswith("sign|"))
+async def pick_sign(c: types.CallbackQuery):
+    _, code = c.data.split("|")
+    set_sign(c.from_user.id, code)
+    await c.answer("Знак сохранён!")
+    await bot.send_message(c.message.chat.id, f"Знак <b>{SIGN_RU[code]}</b> сохранён ✅", reply_markup=kb_main())
+
+# --- Гороскоп (универсально реагирует) ---
+@dp.message_handler(lambda m: m.text and ("гороскоп" in m.text.lower() or "📝" in m.text))
+@dp.message_handler(commands=["today"])
+async def today(m: types.Message):
+    row = get_user(m.from_user.id)
+    if not row or not row[1]:
+        return await m.answer("Сначала выбери знак:", reply_markup=kb_signs())
+    sign = row[1]
+    await m.answer(generate_horoscope(sign), reply_markup=kb_main())
+
+# --- Таро ---
+@dp.message_handler(lambda m: m.text and "🔮" in m.text)
+async def tarot_cmd(m: types.Message):
+    sid = secrets.token_hex(4)
+    TAROT_SESSIONS[(m.chat.id, sid)] = True
+    await m.answer("🔮 <b>Таро дня</b>\nВыбери одну карту:", reply_markup=tarot_keyboard(sid))
+
+# --- Смена знака ---
+@dp.message_handler(lambda m: m.text and "♻️" in m.text)
+async def change_sign(m: types.Message):
+    await m.answer("Выбери новый знак:", reply_markup=kb_signs())
+
+# --- Ежедневные уведомления ---
+@dp.message_handler(lambda m: m.text and "🔔" in m.text)
+async def daily_on(m: types.Message):
+    await m.answer("Выбери время рассылки:", reply_markup=kb_time_picker())
+
+@dp.callback_query_handler(lambda c: c.data.startswith("time|"))
+async def pick_time(c: types.CallbackQuery):
+    _, t = c.data.split("|")
+    h, m_ = map(int, t.split(":"))
+    set_time(c.from_user.id, h, m_)
+    set_daily(c.from_user.id, True)
+    await c.answer("Ежедневные включены!")
+    await bot.send_message(c.message.chat.id, f"🔔 Ежедневные включены на {t}", reply_markup=kb_main())
+
+@dp.message_handler(lambda m: m.text and "🚫" in m.text)
+async def daily_off(m: types.Message):
+    set_daily(m.from_user.id, False)
+    await m.answer("🚫 Ежедневные отключены.", reply_markup=kb_main())
+
+# --- Время ---
+@dp.message_handler(lambda m: m.text and "⏰" in m.text)
+async def show_time(m: types.Message):
+    row = get_user(m.from_user.id)
+    if not row:
+        upsert_user(m.from_user.id)
+        row = get_user(m.from_user.id)
+    _, _, en, hh, mm, _ = row
+    await m.answer(f"⏰ Текущее время рассылки: {hh:02d}:{mm:02d} ({'вкл' if en else 'выкл'})", reply_markup=kb_main())
+
+# --- Фолбэк ---
+@dp.message_handler()
+async def fallback(m: types.Message):
+    await m.answer("Доступно:\n• /start\n• 📝 Гороскоп на сегодня\n• 🔮 Таро дня\n• 🔔 Включить ежедневные\n• ♻️ Сменить знак", reply_markup=kb_main())
+
+# === SCHEDULER ===============================================================
+async def scheduler_loop():
+    await asyncio.sleep(2)
+    while True:
+        now = dt.datetime.now()
+        for uid, sign in get_due_users(now):
+            with contextlib.suppress(Exception):
+                await bot.send_message(uid, generate_horoscope(sign))
+                set_last_sent_today(uid, now.date().isoformat())
+        await asyncio.sleep(60)
+
+async def on_startup(_):
+    asyncio.create_task(scheduler_loop())
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+
