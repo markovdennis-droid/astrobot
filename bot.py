@@ -240,7 +240,8 @@ async def handle_set_time(message: types.Message):
 
     WAITING_FOR_TIME.add(message.chat.id)
     await message.answer(
-        "Напиши время в формате ЧЧ:ММ (например, 09:00 или 21:30).",
+        "Напиши время в формате ЧЧ:ММ (например, 09:00 или 21:30).\n\n"
+        "После этого активируй его кнопкой «Включить ежедневные».",
         reply_markup=types.ReplyKeyboardRemove(),
     )
 
@@ -259,8 +260,8 @@ async def handle_time_input(message: types.Message):
     WAITING_FOR_TIME.discard(message.chat.id)
     user = update_user(message.chat.id, time=text)
     await message.answer(
-        f"Время сохранено: {text}.\n"
-        "Теперь ежедневные гороскопы (если включены) будут приходить в это время.",
+        f"⏰ Время установлено: {text}.\n\n"
+        "Активируй установленное время через кнопку «Включить ежедневные».",
         reply_markup=build_main_keyboard(user["sign"] or "Знак"),
     )
 
