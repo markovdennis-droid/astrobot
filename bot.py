@@ -202,8 +202,8 @@ def get_tarot_image_path(card_name: str) -> Optional[Path]:
     """
     Ищем файл картинки для карты Таро по имени.
     Ожидаем файлы в папке tarot_images:
-    - tarot_images/The Fool.jpg
-    - tarot_images/Колесо фортуны.png
+    - tarot_images/Шут.png
+    - tarot_images/Колесница.jpg
     и т.п.
 
     Сначала пробуем точное совпадение, потом более мягкий вариант (без регистра).
@@ -403,7 +403,8 @@ async def handle_tarot(message: types.Message):
     """
     1-я попытка в день: выдаём карту + текст.
     2-я и далее: ту же карту + подпись, что уже тянул.
-    Если известно название карты и есть картинка, отправляем фото с подписью.
+    Если известно название карты и есть картинка, отправляем как документ с подписью
+    (чтобы картинка оставалась маленькой иконкой).
     """
     result = draw_tarot_for_user(message.chat.id)
     text = result["text"]
@@ -422,18 +423,19 @@ async def handle_tarot(message: types.Message):
         or result.get("name")
     )
 
-    # если имя есть и есть картинка — отправляем фото с подписью
+    # если имя есть и есть картинка — отправляем КАК DOCUMENT с подписью
     if card_name:
         img_path = get_tarot_image_path(card_name)
         if img_path and img_path.exists():
             try:
                 with img_path.open("rb") as f:
-                    await message.answer_photo(
-                        f,
+                    await message.answer_document(
+                        types.InputFile(f, filename=f"{card_name}{img_path.suffix}"),
                         caption=text,
                         reply_markup=build_main_keyboard(
                             get_user(message.chat.id).get("sign") or "Овен"
                         ),
+                        parse_mode="HTML",
                     )
                 return
             except Exception as e:
