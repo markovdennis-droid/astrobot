@@ -4,7 +4,7 @@ import logging
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -13,6 +13,7 @@ from generator import generate as raw_generate, draw_tarot_for_user, ZODIAC_SIGN
 
 BASE_DIR = Path(__file__).parent
 USERS_FILE = BASE_DIR / "users_state.json"
+TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"  # сюда класть картинки карт
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,11 +44,10 @@ def _extract_value(line: str, key: str) -> str:
     if not line:
         return ""
     try:
-        # убираем эмодзи в начале
         line = line.strip()
-        # находим ключ
         idx = line.find(key)
         if idx == -1:
+            # если ключ не нашли — просто убираем эмодзи и возвращаем текст
             return line.lstrip("✨📅🌀🕊💖💼💰🌿🎯#️⃣🎨 ").strip()
         sub = line[idx + len(key):].strip()
         if sub.startswith(":"):
@@ -57,16 +57,33 @@ def _extract_value(line: str, key: str) -> str:
         return line.strip()
 
 
+def _get_season_emoji(now: datetime) -> str:
+    """
+    Возвращает эмодзи сезона в зависимости от месяца:
+    зима ❄️, весна 🌸, лето ☀️, осень 🍁
+    """
+    month = now.month
+    if month in (12, 1, 2):
+        return "❄️"
+    elif month in (3, 4, 5):
+        return "🌸"
+    elif month in (6, 7, 8):
+        return "☀️"
+    else:
+        return "🍁"
+
+
 def format_horoscope_message(sign: str) -> str:
     """
-    Форматируем текст гороскопа в красивую раскладку как на макете:
-    🐏 Овен — гороскоп на сегодня
+    Форматируем текст гороскопа в раскладку:
+
+    🦁 Лев — гороскоп на сегодня
 
     Суббота, 29.11.2025
 
     Тип дня ⚡ гармоничный день
 
-    🍁 Сезонный настрой: ...
+    🌸/☀️/🍁/❄️ Сезонный настрой: ...
     💕 Любовь: ...
     👩‍💻 Работа: ...
     💰 Деньги: ...
@@ -78,10 +95,11 @@ def format_horoscope_message(sign: str) -> str:
     """
     raw = raw_generate(sign)
     emoji = SIGN_EMOJIS.get(sign, "⭐️")
+    now = datetime.now(TZ)
+    season_emoji = _get_season_emoji(now)
 
-    # Вариант 1 — generate() уже отдаёт dict (на будущее)
+    # ----- Вариант 1: generate() отдаёт dict -----
     if isinstance(raw, dict):
-        now = datetime.now(TZ)
         weekday = raw.get("weekday") or now.strftime("%A")
         date_str = raw.get("date") or now.strftime("%d.%m.%Y")
 
@@ -102,35 +120,38 @@ def format_horoscope_message(sign: str) -> str:
             "",
             f"{weekday}, {date_str}",
             "",
-            (f"Тип дня {day_type_emoji} {day_type}".strip()),
+            (f"Тип дня {day_type_emoji} {day_type}".strip()) if day_type else "",
             "",
-            (f"🍁 Сезонный настрой: {season}".strip()),
-            (f"💕 Любовь: {love}".strip()),
-            (f"👩‍💻 Работа: {work}".strip()),
-            (f"💰 Деньги: {money}".strip()),
-            (f"🩺 Здоровье: {health}".strip()),
-            (f"🧘 Совет: {advice}".strip()),
+            (f"{season_emoji} Сезонный настрой: {season}".strip()) if season else "",
+            (f"💕 Любовь: {love}".strip()) if love else "",
+            (f"👩‍💻 Работа: {work}".strip()) if work else "",
+            (f"💰 Деньги: {money}".strip()) if money else "",
+            (f"🩺 Здоровье: {health}".strip()) if health else "",
+            (f"🧘 Совет: {advice}".strip()) if advice else "",
             "",
-            (f"✨ Число дня: {number}".strip()),
-            (f"✨ Цвет дня: {color}".strip()),
+            (f"✨ Число дня: {number}".strip()) if number else "",
+            (f"✨ Цвет дня: {color}".strip()) if color else "",
         ]
         cleaned = [l for l in lines if l and not l.isspace()]
         return "\n".join(cleaned)
 
-    # Вариант 2 — generate() возвращает строку (текущий случай)
+    # ----- Вариант 2: generate() отдаёт строку (текущий случай) -----
     if isinstance(raw, str):
-        # Разбираем существующий текст по строкам и вытаскиваем значения
         lines_in = [l.strip() for l in raw.splitlines() if l.strip()]
 
-        # дата: строка с 📅 или что-то похожее на "Суббота, 29.11.2025"
+        # Дата (строка с 📅 или чем-то типа "Суббота, 29.11.2025")
         date_src = ""
         for l in lines_in:
-            if "📅" in l or "." in l and "," in l:
+            if "📅" in l or ("," in l and "." in l):
                 date_src = l
                 break
         date_clean = date_src.lstrip("📅").strip()
+        if not date_clean:
+            # запасной вариант, если не нашли
+            weekday = now.strftime("%A")
+            date_clean = f"{weekday}, {now.strftime('%d.%m.%Y')}"
 
-        # остальные блоки
+        # Остальные блоки
         day_type_src = next((l for l in lines_in if "Тип дня" in l), "")
         season_src = next((l for l in lines_in if "Сезонный настрой" in l), "")
         love_src = next((l for l in lines_in if "Любовь" in l), "")
@@ -158,7 +179,7 @@ def format_horoscope_message(sign: str) -> str:
             "",
             (f"Тип дня ⚡ {day_type}".strip()) if day_type else "",
             "",
-            (f"🍁 Сезонный настрой: {season}".strip()) if season else "",
+            (f"{season_emoji} Сезонный настрой: {season}".strip()) if season else "",
             (f"💕 Любовь: {love}".strip()) if love else "",
             (f"👩‍💻 Работа: {work}".strip()) if work else "",
             (f"💰 Деньги: {money}".strip()) if money else "",
@@ -173,6 +194,47 @@ def format_horoscope_message(sign: str) -> str:
 
     # Фолбэк — просто строка
     return str(raw)
+
+
+# ---------- Таро: поиск картинки ----------
+
+def get_tarot_image_path(card_name: str) -> Optional[Path]:
+    """
+    Ищем файл картинки для карты Таро по имени.
+    Ожидаем файлы в папке tarot_images:
+    - tarot_images/The Fool.jpg
+    - tarot_images/Колесо фортуны.png
+    и т.п.
+
+    Сначала пробуем точное совпадение, потом более мягкий вариант (без регистра).
+    """
+    if not card_name:
+        return None
+
+    if not TAROT_IMAGES_DIR.exists():
+        return None
+
+    # точное совпадение по имени
+    exact = None
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+        candidate = TAROT_IMAGES_DIR / f"{card_name}{ext}"
+        if candidate.exists():
+            exact = candidate
+            break
+    if exact:
+        return exact
+
+    # мягкий поиск: без регистра и лишних пробелов
+    norm = card_name.strip().lower()
+    for path in TAROT_IMAGES_DIR.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+            continue
+        if path.stem.strip().lower() == norm:
+            return path
+
+    return None
 
 
 # ---------- Работа с состоянием пользователей ----------
@@ -341,17 +403,48 @@ async def handle_tarot(message: types.Message):
     """
     1-я попытка в день: выдаём карту + текст.
     2-я и далее: ту же карту + подпись, что уже тянул.
+    Если известно название карты и есть картинка, отправляем фото с подписью.
     """
     result = draw_tarot_for_user(message.chat.id)
     text = result["text"]
-    if result["already_drawn"]:
+
+    # дописываем предупреждение, если уже тянул
+    if result.get("already_drawn"):
         text += (
             "\n\nТы уже тянул карту сегодня 🙂"
             "\nКарту Таро можно получать только один раз в сутки."
         )
+
+    # пытаемся понять имя карты из результата
+    card_name = (
+        result.get("card_name")
+        or result.get("card")
+        or result.get("name")
+    )
+
+    # если имя есть и есть картинка — отправляем фото с подписью
+    if card_name:
+        img_path = get_tarot_image_path(card_name)
+        if img_path and img_path.exists():
+            try:
+                with img_path.open("rb") as f:
+                    await message.answer_photo(
+                        f,
+                        caption=text,
+                        reply_markup=build_main_keyboard(
+                            get_user(message.chat.id).get("sign") or "Овен"
+                        ),
+                    )
+                return
+            except Exception as e:
+                logger.exception("Не удалось отправить картинку Таро: %s", e)
+
+    # если картинку не нашли — обычный текст
     await message.answer(
         text,
-        reply_markup=build_main_keyboard(get_user(message.chat.id).get("sign") or "Овен"),
+        reply_markup=build_main_keyboard(
+            get_user(message.chat.id).get("sign") or "Овен"
+        ),
     )
 
 
