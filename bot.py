@@ -34,33 +34,53 @@ SIGN_EMOJIS = {
 }
 
 
+def _extract_value(line: str, key: str) -> str:
+    """
+    Вспомогательная функция: достаём часть после ключа.
+    Пример:
+    "🌀 Тип дня: гармоничный день" + key="Тип дня" -> "гармоничный день"
+    """
+    if not line:
+        return ""
+    try:
+        # убираем эмодзи в начале
+        line = line.strip()
+        # находим ключ
+        idx = line.find(key)
+        if idx == -1:
+            return line.lstrip("✨📅🌀🕊💖💼💰🌿🎯#️⃣🎨 ").strip()
+        sub = line[idx + len(key):].strip()
+        if sub.startswith(":"):
+            sub = sub[1:].strip()
+        return sub
+    except Exception:
+        return line.strip()
+
+
 def format_horoscope_message(sign: str) -> str:
     """
-    Форматирует текст гороскопа под красивую раскладку в Telegram.
+    Форматируем текст гороскопа в красивую раскладку как на макете:
+    🐏 Овен — гороскоп на сегодня
 
-    Мы аккуратно оборачиваем то, что возвращает generator.generate, чтобы:
-    - не ломать старое поведение, если там уже готовый текст;
-    - уметь собирать новый формат, если generate() вернёт dict с полями.
+    Суббота, 29.11.2025
+
+    Тип дня ⚡ гармоничный день
+
+    🍁 Сезонный настрой: ...
+    💕 Любовь: ...
+    👩‍💻 Работа: ...
+    💰 Деньги: ...
+    🩺 Здоровье: ...
+    🧘 Совет: ...
+
+    ✨ Число дня: ...
+    ✨ Цвет дня: ...
     """
     raw = raw_generate(sign)
+    emoji = SIGN_EMOJIS.get(sign, "⭐️")
 
-    # 1) Самый частый случай — generate() уже отдаёт готовую строку.
-    if isinstance(raw, str):
-        text = raw.strip()
-        emoji = SIGN_EMOJIS.get(sign, "⭐️")
-        header = f"{emoji} {sign} — гороскоп на сегодня"
-
-        # Если первая строка уже похожа на заголовок — не дублируем.
-        first_line = text.splitlines()[0] if text.splitlines() else ""
-        if sign in first_line and "гороскоп" in first_line.lower():
-            return text
-
-        return f"{header}\n\n{text}"
-
-    # 2) Продвинутый вариант: generate() возвращает dict с частями гороскопа.
+    # Вариант 1 — generate() уже отдаёт dict (на будущее)
     if isinstance(raw, dict):
-        emoji = SIGN_EMOJIS.get(sign, "⭐️")
-
         now = datetime.now(TZ)
         weekday = raw.get("weekday") or now.strftime("%A")
         date_str = raw.get("date") or now.strftime("%d.%m.%Y")
@@ -80,7 +100,7 @@ def format_horoscope_message(sign: str) -> str:
         lines = [
             f"{emoji} {sign} — гороскоп на сегодня",
             "",
-            f"{now.day} {weekday}, {date_str}",
+            f"{weekday}, {date_str}",
             "",
             (f"Тип дня {day_type_emoji} {day_type}".strip()),
             "",
@@ -94,12 +114,64 @@ def format_horoscope_message(sign: str) -> str:
             (f"✨ Число дня: {number}".strip()),
             (f"✨ Цвет дня: {color}".strip()),
         ]
-
-        # Чистим пустые строки
-        cleaned = [line for line in lines if line and not line.isspace()]
+        cleaned = [l for l in lines if l and not l.isspace()]
         return "\n".join(cleaned)
 
-    # 3) На всякий случай — приводим к строке.
+    # Вариант 2 — generate() возвращает строку (текущий случай)
+    if isinstance(raw, str):
+        # Разбираем существующий текст по строкам и вытаскиваем значения
+        lines_in = [l.strip() for l in raw.splitlines() if l.strip()]
+
+        # дата: строка с 📅 или что-то похожее на "Суббота, 29.11.2025"
+        date_src = ""
+        for l in lines_in:
+            if "📅" in l or "." in l and "," in l:
+                date_src = l
+                break
+        date_clean = date_src.lstrip("📅").strip()
+
+        # остальные блоки
+        day_type_src = next((l for l in lines_in if "Тип дня" in l), "")
+        season_src = next((l for l in lines_in if "Сезонный настрой" in l), "")
+        love_src = next((l for l in lines_in if "Любовь" in l), "")
+        work_src = next((l for l in lines_in if "Работа" in l), "")
+        money_src = next((l for l in lines_in if "Деньги" in l), "")
+        health_src = next((l for l in lines_in if "Здоровье" in l), "")
+        advice_src = next((l for l in lines_in if "Совет" in l), "")
+        number_src = next((l for l in lines_in if "Число дня" in l), "")
+        color_src = next((l for l in lines_in if "Цвет дня" in l), "")
+
+        day_type = _extract_value(day_type_src, "Тип дня")
+        season = _extract_value(season_src, "Сезонный настрой")
+        love = _extract_value(love_src, "Любовь")
+        work = _extract_value(work_src, "Работа")
+        money = _extract_value(money_src, "Деньги")
+        health = _extract_value(health_src, "Здоровье")
+        advice = _extract_value(advice_src, "Совет")
+        number = _extract_value(number_src, "Число дня").rstrip(".")
+        color = _extract_value(color_src, "Цвет дня")
+
+        out_lines = [
+            f"{emoji} {sign} — гороскоп на сегодня",
+            "",
+            date_clean,
+            "",
+            (f"Тип дня ⚡ {day_type}".strip()) if day_type else "",
+            "",
+            (f"🍁 Сезонный настрой: {season}".strip()) if season else "",
+            (f"💕 Любовь: {love}".strip()) if love else "",
+            (f"👩‍💻 Работа: {work}".strip()) if work else "",
+            (f"💰 Деньги: {money}".strip()) if money else "",
+            (f"🩺 Здоровье: {health}".strip()) if health else "",
+            (f"🧘 Совет: {advice}".strip()) if advice else "",
+            "",
+            (f"✨ Число дня: {number}".strip()) if number else "",
+            (f"✨ Цвет дня: {color}".strip()) if color else "",
+        ]
+        cleaned = [l for l in out_lines if l and not l.isspace()]
+        return "\n".join(cleaned)
+
+    # Фолбэк — просто строка
     return str(raw)
 
 
@@ -267,10 +339,8 @@ async def handle_today_horoscope(message: types.Message):
 @dp.message_handler(lambda m: m.text == "🔮 Таро дня")
 async def handle_tarot(message: types.Message):
     """
-    Здесь как раз жёсткое правило:
-    - 1-я попытка в день: выдаём карту + текст
-    - 2-я и далее: ту же карту + подпись, что уже тянул
-    НИКАКИХ отдельных кнопок выбора карт тут нет.
+    1-я попытка в день: выдаём карту + текст.
+    2-я и далее: ту же карту + подпись, что уже тянул.
     """
     result = draw_tarot_for_user(message.chat.id)
     text = result["text"]
@@ -279,7 +349,10 @@ async def handle_tarot(message: types.Message):
             "\n\nТы уже тянул карту сегодня 🙂"
             "\nКарту Таро можно получать только один раз в сутки."
         )
-    await message.answer(text, reply_markup=build_main_keyboard(get_user(message.chat.id).get("sign") or "Овен"))
+    await message.answer(
+        text,
+        reply_markup=build_main_keyboard(get_user(message.chat.id).get("sign") or "Овен"),
+    )
 
 
 @dp.message_handler(lambda m: m.text == "⏰ Настроить напоминание")
@@ -305,7 +378,6 @@ async def handle_cancel_or_back(message: types.Message):
             reply_markup=build_main_keyboard(get_user(chat_id).get("sign") or "Овен"),
         )
     else:
-        # Назад
         if chat_id in WAITING_FOR_TIME:
             WAITING_FOR_TIME.discard(chat_id)
         await message.answer(
@@ -320,7 +392,6 @@ async def handle_any_message(message: types.Message):
     text = message.text.strip()
 
     if chat_id in WAITING_FOR_TIME:
-        # Ожидаем время
         if len(text) == 5 and text[2] == ":" and text[:2].isdigit() and text[3:].isdigit():
             update_user(chat_id, notify=True, time=text)
             WAITING_FOR_TIME.discard(chat_id)
@@ -334,7 +405,6 @@ async def handle_any_message(message: types.Message):
                 reply_markup=build_time_keyboard(),
             )
     else:
-        # Если сообщение не про время, просто подсказка
         user = get_user(chat_id)
         sign = user.get("sign")
         if not sign:
@@ -352,9 +422,6 @@ async def handle_any_message(message: types.Message):
 # ---------- Планировщик ----------
 
 async def scheduler(dp: Dispatcher):
-    """
-    Каждую минуту проверяем: есть ли пользователи, у которых сейчас время отправки.
-    """
     while True:
         try:
             now_dt = datetime.now(TZ)
