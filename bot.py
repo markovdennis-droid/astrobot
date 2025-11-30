@@ -18,6 +18,23 @@ TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"  # сюда класть карти
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Явное соответствие имён карт -> файлов
+TAROT_IMAGE_MAP: Dict[str, Path] = {
+    "Шут": TAROT_IMAGES_DIR / "Шут.png",                     # если такой файл есть
+    "Маг": TAROT_IMAGES_DIR / "маг.png",
+    "Верховная жрица": TAROT_IMAGES_DIR / "Верховная жрица.png",
+    "Императрица": TAROT_IMAGES_DIR / "Императрица.png",
+    "Император": TAROT_IMAGES_DIR / "Император.png",        # на случай, если добавишь
+    "Иерофант": TAROT_IMAGES_DIR / "Иерофант.png",
+    "Влюблённые": TAROT_IMAGES_DIR / "Влюбленные.png",
+    "Колесница": TAROT_IMAGES_DIR / "Колесница.png",
+    "Сила": TAROT_IMAGES_DIR / "Сила.png",
+    "Звезда": TAROT_IMAGES_DIR / "Звезда.png",
+    "Солнце": TAROT_IMAGES_DIR / "Солнце.png",
+    "Мир": TAROT_IMAGES_DIR / "Мир.png",
+    "Отшельник": TAROT_IMAGES_DIR / "Отшельник.png",
+}
+
 # Эмодзи для знаков
 SIGN_EMOJIS = {
     "Овен": "🐏",
@@ -201,39 +218,39 @@ def format_horoscope_message(sign: str) -> str:
 def get_tarot_image_path(card_name: str) -> Optional[Path]:
     """
     Ищем файл картинки для карты Таро по имени.
-    Ожидаем файлы в папке tarot_images:
-    - tarot_images/Шут.png
-    - tarot_images/Колесница.jpg
-    и т.п.
-
-    Сначала пробуем точное совпадение, потом более мягкий вариант (без регистра).
+    1) сначала смотрим в TAROT_IMAGE_MAP
+    2) потом пытаемся подобрать файл "<имя>.png/.jpg/.jpeg/.webp"
+    3) потом мягкий поиск по stem без регистра
     """
     if not card_name:
         return None
 
     if not TAROT_IMAGES_DIR.exists():
+        logger.warning("Папка с картинками Таро не найдена: %s", TAROT_IMAGES_DIR)
         return None
 
-    # точное совпадение по имени
-    exact = None
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+    # 1. явное соответствие
+    mapped = TAROT_IMAGE_MAP.get(card_name)
+    if mapped and mapped.exists():
+        return mapped
+
+    # 2. прямое совпадение "Имя.png" и т.п.
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
         candidate = TAROT_IMAGES_DIR / f"{card_name}{ext}"
         if candidate.exists():
-            exact = candidate
-            break
-    if exact:
-        return exact
+            return candidate
 
-    # мягкий поиск: без регистра и лишних пробелов
+    # 3. мягкий поиск по имени файла
     norm = card_name.strip().lower()
     for path in TAROT_IMAGES_DIR.iterdir():
         if not path.is_file():
             continue
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+        if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
             continue
         if path.stem.strip().lower() == norm:
             return path
 
+    logger.warning("Картинка для карты '%s' не найдена", card_name)
     return None
 
 
@@ -296,7 +313,7 @@ def build_main_keyboard(sign: str) -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     emoji = SIGN_EMOJIS.get(sign, "⭐️")
     kb.row(KeyboardButton(f"{emoji} {sign} — гороскоп на сегодня"))
-    kb.row(KeyboardButton("🔮 Таро дня"))
+    kb.row(KeyboardButton("🔮 Еженедельная карта Таро"))
     kb.row(KeyboardButton("⏰ Настроить напоминание"))
     kb.row(KeyboardButton("♻️ Сменить знак"))
     return kb
@@ -347,7 +364,8 @@ async def cmd_start(message: types.Message):
         text = (
             f"Снова привет, {message.from_user.first_name}!\n\n"
             f"Твой текущий знак: {sign}.\n"
-            "Могу показать гороскоп на сегодня, карту Таро дня и отправлять ежедневные прогнозы.\n\n"
+            "Могу показать гороскоп на сегодня, еженедельную карту Таро "
+            "и отправлять ежедневные прогнозы.\n\n"
             "Нажми кнопку ниже, чтобы получить гороскоп 👇"
         )
         await message.answer(text, reply_markup=build_main_keyboard(sign))
@@ -398,55 +416,50 @@ async def handle_today_horoscope(message: types.Message):
     await message.answer(text, reply_markup=build_main_keyboard(sign))
 
 
-@dp.message_handler(lambda m: m.text == "🔮 Таро дня")
-async def handle_tarot(message: types.Message):
+# ---------- Еженедельная карта Таро: КАРТИНКА + ОТДЕЛЬНО ТЕКСТ ----------
+
+@dp.message_handler(lambda m: m.text in {"🔮 Еженедельная карта Таро", "🔮 Таро дня"})
+async def handle_weekly_tarot(message: types.Message):
     """
-    1-я попытка в день: выдаём карту + текст.
-    2-я и далее: ту же карту + подпись, что уже тянул.
-    Если известно название карты и есть картинка, отправляем как документ с подписью
-    (чтобы картинка оставалась маленькой иконкой).
+    Еженедельная карта Таро:
+    - draw_tarot_for_user() сам следит за интервалом в 7 дней
+    - сначала отправляем КАРТИНКУ
+    - затем отдельным сообщением ТЕКСТ
     """
     result = draw_tarot_for_user(message.chat.id)
-    text = result["text"]
+    text = result.get("text", "")
+    already = result.get("already_drawn", False)
 
-    # дописываем предупреждение, если уже тянул
-    if result.get("already_drawn"):
+    # имя карты из результата
+    card_name = result.get("card_name")
+
+    # если вдруг генератор не вернул имя — попробуем вытащить из текста
+    if not card_name and text.startswith("🔮"):
+        first_line = text.splitlines()[0]
+        if ":" in first_line:
+            card_name = first_line.split(":", 1)[1].strip()
+
+    # 1) картинка
+    img_path = get_tarot_image_path(card_name) if card_name else None
+    if img_path and img_path.exists():
+        try:
+            await message.answer_photo(
+                photo=types.InputFile(str(img_path))
+            )
+        except Exception as e:
+            logger.exception("Не удалось отправить картинку Таро: %s", e)
+
+    # 2) текст
+    if already:
         text += (
-            "\n\nТы уже тянул карту сегодня 🙂"
-            "\nКарту Таро можно получать только один раз в сутки."
+            "\n\nТы уже вытянул эту карту на этой неделе 🙂\n"
+            "Следующую можно будет получить через 7 дней."
         )
 
-    # пытаемся понять имя карты из результата
-    card_name = (
-        result.get("card_name")
-        or result.get("card")
-        or result.get("name")
-    )
-
-    # если имя есть и есть картинка — отправляем КАК DOCUMENT с подписью
-    if card_name:
-        img_path = get_tarot_image_path(card_name)
-        if img_path and img_path.exists():
-            try:
-                with img_path.open("rb") as f:
-                    await message.answer_document(
-                        types.InputFile(f, filename=f"{card_name}{img_path.suffix}"),
-                        caption=text,
-                        reply_markup=build_main_keyboard(
-                            get_user(message.chat.id).get("sign") or "Овен"
-                        ),
-                        parse_mode="HTML",
-                    )
-                return
-            except Exception as e:
-                logger.exception("Не удалось отправить картинку Таро: %s", e)
-
-    # если картинку не нашли — обычный текст
+    sign = get_user(message.chat.id).get("sign") or "Овен"
     await message.answer(
         text,
-        reply_markup=build_main_keyboard(
-            get_user(message.chat.id).get("sign") or "Овен"
-        ),
+        reply_markup=build_main_keyboard(sign),
     )
 
 
