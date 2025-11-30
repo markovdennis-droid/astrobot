@@ -8,8 +8,15 @@ from typing import Dict, Any, Optional
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils import executor
 
-from generator import generate, draw_tarot_for_user, ZODIAC_SIGNS, TZ
+from generator import (
+    generate,
+    draw_tarot_for_user,
+    ZODIAC_SIGNS,
+    SIGN_NAMES,
+    TZ,
+)
 
 BASE_DIR = Path(__file__).parent
 USERS_FILE = BASE_DIR / "users_state.json"
@@ -19,6 +26,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
+
+SUPPORTED_LANGS = ["ru", "en", "es"]
 
 SIGN_EMOJIS = {
     "Овен": "🐏",
@@ -35,8 +44,6 @@ SIGN_EMOJIS = {
     "Рыбы": "🐟",
 }
 
-SUPPORTED_LANGS = ["ru", "en", "es"]
-
 UI = {
     "ru": {
         "choose_lang": "Выберите язык:",
@@ -44,7 +51,7 @@ UI = {
         "btn_lang_en": "🇬🇧 English",
         "btn_lang_es": "🇪🇸 Español",
         "start_no_sign": "✨ Привет! Я астробот.\n\nВыбери свой знак зодиака:",
-        "start_with_sign": "Снова привет, {name}!\n\nТвой текущий знак: {sign}.\n",
+        "start_with_sign": "Снова привет, {name}!\n\nТвой текущий знак: {sign}.",
         "btn_tarot": "🔮 Еженедельная карта Таро",
         "btn_reminder": "⏰ Настроить напоминание",
         "btn_change_sign": "♻️ Сменить знак",
@@ -64,6 +71,7 @@ UI = {
         "stats_by_sign": "⭐️ По знакам:",
         "reminder_time_format": "Пожалуйста, введи время в формате ЧЧ:ММ, например 09:00.",
         "lang_set": "Язык сохранён: Русский.",
+        "horoscope_button_pattern": "гороскоп",
     },
     "en": {
         "choose_lang": "Choose your language:",
@@ -71,7 +79,7 @@ UI = {
         "btn_lang_en": "🇬🇧 English",
         "btn_lang_es": "🇪🇸 Español",
         "start_no_sign": "✨ Hi! I am AstroBot.\n\nChoose your zodiac sign:",
-        "start_with_sign": "Hi again, {name}!\n\nYour current sign: {sign}.\n",
+        "start_with_sign": "Hi again, {name}!\n\nYour current sign: {sign}.",
         "btn_tarot": "🔮 Weekly Tarot card",
         "btn_reminder": "⏰ Set reminder",
         "btn_change_sign": "♻️ Change sign",
@@ -91,6 +99,7 @@ UI = {
         "stats_by_sign": "⭐️ By signs:",
         "reminder_time_format": "Please enter time in HH:MM format, e.g. 09:00.",
         "lang_set": "Language set to English.",
+        "horoscope_button_pattern": "horoscope",
     },
     "es": {
         "choose_lang": "Elige un idioma:",
@@ -98,7 +107,7 @@ UI = {
         "btn_lang_en": "🇬🇧 English",
         "btn_lang_es": "🇪🇸 Español",
         "start_no_sign": "✨ ¡Hola! Soy AstroBot.\n\nElige tu signo del zodiaco:",
-        "start_with_sign": "Hola de nuevo, {name}!\n\nTu signo actual: {sign}.\n",
+        "start_with_sign": "Hola de nuevo, {name}!\n\nTu signo actual: {sign}.",
         "btn_tarot": "🔮 Carta de Tarot semanal",
         "btn_reminder": "⏰ Configurar recordatorio",
         "btn_change_sign": "♻️ Cambiar signo",
@@ -118,6 +127,7 @@ UI = {
         "stats_by_sign": "⭐️ Por signos:",
         "reminder_time_format": "Introduce la hora en formato HH:MM, por ejemplo 09:00.",
         "lang_set": "Idioma configurado: Español.",
+        "horoscope_button_pattern": "horóscopo",
     },
 }
 
@@ -173,12 +183,13 @@ def get_tarot_image_path(image_name: str) -> Optional[Path]:
     return None
 
 
-def build_sign_keyboard() -> ReplyKeyboardMarkup:
+def build_sign_keyboard(lang: str) -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     row = []
-    for idx, sign in enumerate(ZODIAC_SIGNS, start=1):
-        emoji = SIGN_EMOJIS.get(sign, "⭐️")
-        row.append(KeyboardButton(f"{emoji} {sign}"))
+    for idx, base_sign in enumerate(ZODIAC_SIGNS, start=1):
+        emoji = SIGN_EMOJIS.get(base_sign, "⭐️")
+        local_name = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(base_sign, base_sign)
+        row.append(KeyboardButton(f"{emoji} {local_name}"))
         if idx % 3 == 0:
             kb.row(*row)
             row = []
@@ -199,12 +210,13 @@ def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
     ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     emoji = SIGN_EMOJIS.get(sign, "⭐️")
+    local_name = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(sign, sign)
     if lang == "ru":
-        title = f"{emoji} {sign} — гороскоп на сегодня"
+        title = f"{emoji} {local_name} — гороскоп на сегодня"
     elif lang == "en":
-        title = f"{emoji} {sign} — horoscope for today"
+        title = f"{emoji} {local_name} — horoscope for today"
     else:
-        title = f"{emoji} {sign} — horóscopo para hoy"
+        title = f"{emoji} {local_name} — horóscopo para hoy"
     kb.row(KeyboardButton(title))
     kb.row(KeyboardButton(ui["btn_tarot"]))
     kb.row(KeyboardButton(ui["btn_reminder"]))
@@ -217,7 +229,7 @@ def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
     kb.row(KeyboardButton("07:00"), KeyboardButton("08:00"), KeyboardButton("09:00"))
     kb.row(KeyboardButton("10:00"), KeyboardButton("11:00"), KeyboardButton("12:00"))
     kb.row(KeyboardButton("18:00"), KeyboardButton("20:00"), KeyboardButton("22:00"))
-    # Кнопки управления — пока на русском, но логика единая для всех
+    # Кнопки управления пока общие
     kb.row(KeyboardButton("❌ Отменить напоминания"))
     kb.row(KeyboardButton("⬅️ Назад"))
     return kb
@@ -238,7 +250,7 @@ async def cmd_start(message: types.Message):
     user = get_user(message.chat.id)
     lang = user.get("lang")
 
-    # Первый старт – выбор языка
+    # Первый старт — выбираем язык
     if not lang:
         await message.answer(UI["ru"]["choose_lang"], reply_markup=build_lang_keyboard())
         return
@@ -249,16 +261,18 @@ async def cmd_start(message: types.Message):
 
     ui = UI[lang]
     sign = user.get("sign")
+
     if sign:
+        local_name = SIGN_NAMES[lang].get(sign, sign)
         extra = {
             "ru": "Нажми кнопку ниже, чтобы получить гороскоп 👇",
             "en": "Tap the button below to get your horoscope 👇",
             "es": "Pulsa el botón de abajo para ver tu horóscopo 👇",
         }[lang]
-        text = ui["start_with_sign"].format(name=message.from_user.first_name, sign=sign) + "\n" + extra
+        text = ui["start_with_sign"].format(name=message.from_user.first_name, sign=local_name) + "\n\n" + extra
         await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
     else:
-        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard())
+        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
 
 
 @dp.message_handler(commands=["stats"])
@@ -284,8 +298,13 @@ async def cmd_stats(message: types.Message):
         "",
         ui["stats_by_sign"],
     ]
-    for sign, count in sorted(by_sign.items()):
-        lines.append(f"• {sign}: {count}")
+
+    for base_sign, count in sorted(by_sign.items()):
+        if base_sign in SIGN_NAMES["ru"]:
+            label = SIGN_NAMES[lang].get(base_sign, base_sign)
+        else:
+            label = base_sign
+        lines.append(f"• {label}: {count}")
 
     await message.answer("\n".join(lines))
 
@@ -310,29 +329,43 @@ async def handle_lang_choice(message: types.Message):
     sign = user.get("sign")
     await message.answer(ui["lang_set"])
     if sign:
+        local_name = SIGN_NAMES[lang].get(sign, sign)
         await message.answer(
-            ui["start_with_sign"].format(name=message.from_user.first_name, sign=sign),
+            ui["start_with_sign"].format(name=message.from_user.first_name, sign=local_name),
             reply_markup=build_main_keyboard(sign, lang),
         )
     else:
-        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard())
+        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
 
 
 @dp.message_handler(lambda m: m.text and m.text.startswith(tuple(SIGN_EMOJIS.values())))
 async def handle_sign_choice(message: types.Message):
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+
     parts = message.text.split(" ", 1)
     if len(parts) < 2:
         return
-    sign = parts[1]
-    if sign not in ZODIAC_SIGNS:
+    label = parts[1].strip()
+
+    # Находим внутренний знак по локализованному имени
+    base_sign = None
+    for s in ZODIAC_SIGNS:
+        if SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(s, s) == label:
+            base_sign = s
+            break
+
+    if not base_sign:
         return
 
-    lang = get_user_lang(message.chat.id)
-    update_user(message.chat.id, sign=sign)
-    text = generate(sign, lang)
+    update_user(chat_id, sign=base_sign)
+    text = generate(base_sign, lang)
+    local_name = SIGN_NAMES[lang].get(base_sign, base_sign)
+    ui = UI[lang]
+
     await message.answer(
-        f"{UI[lang]['start_with_sign'].format(name=message.from_user.first_name, sign=sign)}\n{text}",
-        reply_markup=build_main_keyboard(sign, lang),
+        ui["start_with_sign"].format(name=message.from_user.first_name, sign=local_name) + "\n\n" + text,
+        reply_markup=build_main_keyboard(base_sign, lang),
     )
 
 
@@ -340,13 +373,14 @@ async def handle_sign_choice(message: types.Message):
     word in m.text.lower() for word in ("гороскоп", "horoscope", "horóscopo")
 ))
 async def handle_today_horoscope(message: types.Message):
-    user = get_user(message.chat.id)
-    lang = get_user_lang(message.chat.id)
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
     ui = UI[lang]
 
+    user = get_user(chat_id)
     sign = user.get("sign")
     if not sign:
-        await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
+        await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard(lang))
         return
 
     text = generate(sign, lang)
@@ -361,17 +395,18 @@ async def handle_today_horoscope(message: types.Message):
 async def handle_change_sign(message: types.Message):
     lang = get_user_lang(message.chat.id)
     ui = UI[lang]
-    await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
+    await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard(lang))
 
 
 @dp.message_handler(lambda m: m.text and (
     "таро" in m.text.lower() or "tarot" in m.text.lower()
 ))
 async def handle_tarot(message: types.Message):
-    lang = get_user_lang(message.chat.id)
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
     ui = UI[lang]
 
-    result = draw_tarot_for_user(message.chat.id, lang=lang)
+    result = draw_tarot_for_user(chat_id, lang=lang)
     text = result["text"]
     if result.get("already_drawn"):
         text += "\n\n" + ui["tarot_already"]
@@ -384,8 +419,8 @@ async def handle_tarot(message: types.Message):
         except Exception as e:
             logger.exception("Не удалось отправить картинку Таро: %s", e)
 
-    user = get_user(message.chat.id)
-    sign = user.get("sign") or "Овен"
+    user = get_user(chat_id)
+    sign = user.get("sign") or ZODIAC_SIGNS[0]
     await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
 
 
@@ -393,9 +428,10 @@ async def handle_tarot(message: types.Message):
     key in m.text.lower() for key in ("напомин", "reminder", "recordatorio")
 ))
 async def handle_set_reminder(message: types.Message):
-    lang = get_user_lang(message.chat.id)
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
     ui = UI[lang]
-    WAITING_FOR_TIME.add(message.chat.id)
+    WAITING_FOR_TIME.add(chat_id)
     await message.answer(ui["reminder_prompt"], reply_markup=build_time_keyboard(lang))
 
 
@@ -408,11 +444,11 @@ async def handle_cancel_or_back(message: types.Message):
     if message.text == "❌ Отменить напоминания":
         update_user(chat_id, notify=False)
         WAITING_FOR_TIME.discard(chat_id)
-        sign = get_user(chat_id).get("sign") or "Овен"
+        sign = get_user(chat_id).get("sign") or ZODIAC_SIGNS[0]
         await message.answer(ui["reminder_cleared"], reply_markup=build_main_keyboard(sign, lang))
     else:
         WAITING_FOR_TIME.discard(chat_id)
-        sign = get_user(chat_id).get("sign") or "Овен"
+        sign = get_user(chat_id).get("sign") or ZODIAC_SIGNS[0]
         await message.answer(ui["back_to_menu"], reply_markup=build_main_keyboard(sign, lang))
 
 
@@ -421,13 +457,13 @@ async def handle_any_message(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
     ui = UI[lang]
-    text = message.text.strip() if message.text else ""
+    text = (message.text or "").strip()
 
     if chat_id in WAITING_FOR_TIME:
         if len(text) == 5 and text[2] == ":" and text[:2].isdigit() and text[3:].isdigit():
             update_user(chat_id, notify=True, time=text)
             WAITING_FOR_TIME.discard(chat_id)
-            sign = get_user(chat_id).get("sign") or "Овен"
+            sign = get_user(chat_id).get("sign") or ZODIAC_SIGNS[0]
             await message.answer(
                 ui["reminder_set"].format(time=text),
                 reply_markup=build_main_keyboard(sign, lang),
@@ -438,7 +474,7 @@ async def handle_any_message(message: types.Message):
         user = get_user(chat_id)
         sign = user.get("sign")
         if not sign:
-            await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
+            await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard(lang))
         else:
             await message.answer(ui["unknown"], reply_markup=build_main_keyboard(sign, lang))
 
@@ -477,5 +513,4 @@ async def on_startup(dp: Dispatcher):
 
 
 if __name__ == "__main__":
-    from aiogram.utils import executor
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
