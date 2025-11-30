@@ -304,15 +304,17 @@ def generate(sign: str) -> str:
 
 def draw_tarot_for_user(user_id: int) -> Dict[str, Any]:
     """
+    ЕЖЕНЕДЕЛЬНАЯ карта Таро.
     Возвращает:
     {
         "text": "...",
         "already_drawn": True/False,
         "card_name": "Имя карты"
     }
+    Новая карта доступна раз в 7 дней.
     """
     now = datetime.now(TZ)
-    today_str = now.date().isoformat()
+    today = now.date()
 
     state = load_astro_state()
     tarot_state = state.setdefault("tarot", {})
@@ -321,23 +323,28 @@ def draw_tarot_for_user(user_id: int) -> Dict[str, Any]:
     key = str(user_id)
     user_entry = users_state.get(key)
 
-    # Если карта уже тянулась сегодня — возвращаем ту же
-    if isinstance(user_entry, dict) and user_entry.get("date") == today_str:
-        card = user_entry.get("card", {})
-        name = card.get("name", "Карта дня")
-        short = card.get("short", "")
-        meaning = card.get("meaning", "")
-        text = (
-            f"🔮 Таро дня: {name}\n"
-            f"Ключ: {short}\n\n"
-            f"{meaning}"
-        )
-        return {"text": text, "already_drawn": True, "card_name": name}
+    # Если уже есть карта – проверяем разницу в днях
+    if isinstance(user_entry, dict) and "date" in user_entry:
+        last_date = date.fromisoformat(user_entry["date"])
+        delta_days = (today - last_date).days
+
+        if delta_days < 7:
+            # Ещё не прошло 7 дней — возвращаем ту же карту
+            card = user_entry.get("card", {})
+            name = card.get("name", "Карта")
+            short = card.get("short", "")
+            meaning = card.get("meaning", "")
+            text = (
+                f"🔮 Еженедельная карта Таро: {name}\n"
+                f"Ключ: {short}\n\n"
+                f"{meaning}"
+            )
+            return {"text": text, "already_drawn": True, "card_name": name}
 
     # Иначе тянем новую карту
     card = random.choice(TAROT_CARDS)
     users_state[key] = {
-        "date": today_str,
+        "date": today.isoformat(),
         "card": card,
     }
     tarot_state["users"] = users_state
@@ -345,7 +352,7 @@ def draw_tarot_for_user(user_id: int) -> Dict[str, Any]:
     save_astro_state(state)
 
     text = (
-        f"🔮 Таро дня: {card['name']}\n"
+        f"🔮 Еженедельная карта Таро: {card['name']}\n"
         f"Ключ: {card['short']}\n\n"
         f"{card['meaning']}"
     )
