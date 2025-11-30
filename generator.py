@@ -9,10 +9,10 @@ import pytz
 BASE_DIR = Path(__file__).parent
 ASTRO_STATE_FILE = BASE_DIR / "astro_state.json"
 
-# Timezone (Spain)
+# Таймзона (Испания)
 TZ = pytz.timezone("Europe/Madrid")
 
-# Внутренние имена знаков (как и раньше, по-русски — для состояния)
+# Внутренние (базовые) имена знаков — по-русски
 ZODIAC_SIGNS = [
     "Овен",
     "Телец",
@@ -76,7 +76,23 @@ SIGN_NAMES = {
     },
 }
 
-# ------------- Phrase dictionaries -------------
+# Эмодзи знаков — для заголовка (как на скрине)
+SIGN_EMOJIS = {
+    "Овен": "🐏",
+    "Телец": "🐂",
+    "Близнецы": "👥",
+    "Рак": "🦀",
+    "Лев": "🦁",
+    "Дева": "👩‍🦰",
+    "Весы": "⚖️",
+    "Скорпион": "🦂",
+    "Стрелец": "🏹",
+    "Козерог": "🐐",
+    "Водолей": "🌊",
+    "Рыбы": "🐟",
+}
+
+# ---------- Фразы для гороскопа ----------
 
 PHRASES = {
     "ru": {
@@ -359,7 +375,7 @@ PHRASES = {
 
 NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-# -------- TAROT CARDS --------
+# --- ТАРО: карты (как раньше) ---
 
 TAROT_CARDS = [
     {
@@ -510,7 +526,7 @@ TAROT_CARDS = [
 CARD_BY_ID = {c["id"]: c for c in TAROT_CARDS}
 
 
-# ------------- State helpers -------------
+# ---------- Работа с общим состоянием (гороскопы + таро) ----------
 
 def load_astro_state() -> Dict[str, Any]:
     if not ASTRO_STATE_FILE.exists():
@@ -537,6 +553,16 @@ def get_season(now: datetime) -> str:
     if m in (6, 7, 8):
         return "summer"
     return "autumn"
+
+
+def _season_emoji(season_key: str) -> str:
+    if season_key == "winter":
+        return "❄️"
+    if season_key == "spring":
+        return "🌸"
+    if season_key == "summer":
+        return "☀️"
+    return "🍁"
 
 
 def _random_pattern(now: datetime) -> Dict[str, Any]:
@@ -566,16 +592,34 @@ def _random_pattern(now: datetime) -> Dict[str, Any]:
 
 
 def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str, Any]) -> str:
+    """
+    Форматируем текст в том самом стиле:
+    🐏Овен — гороскоп на сегодня
+
+    Четверг, 27.11.2025
+
+    Тип дня ⚡ ...
+    🍁Сезонный настрой: ...
+    💕Любовь: ...
+    👩‍💻Работа: ...
+    💰Деньги: ...
+    🩺Здоровье: ...
+    🧘Совет: ...
+
+    ✨Число дня: ...
+    ✨Цвет дня: ...
+    """
     if lang not in SUPPORTED_LANGS:
         lang = "ru"
+
     ph = PHRASES[lang]
     weekday_en = now.strftime("%A")
     weekday_local = ph["weekday"].get(weekday_en, weekday_en)
     date_str = now.strftime("%d.%m.%Y")
-
     labels = ph["labels"]
 
-    display_sign = SIGN_NAMES.get(lang, {}).get(sign, sign)
+    display_sign = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(sign, sign)
+    emoji_sign = SIGN_EMOJIS.get(sign, "⭐️")
 
     season_key = pattern["season_key"]
     season_idx = pattern["season_idx"]
@@ -598,21 +642,33 @@ def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str
     color = ph["colors"][color_idx]
 
     title = labels["title"].format(sign=display_sign)
+    season_emoji = _season_emoji(season_key)
+
+    # Emojis для блоков, одинаковые во всех языках
+    emoji_love = "💕"
+    emoji_work = "👩‍💻"
+    emoji_money = "💰"
+    emoji_health = "🩺"
+    emoji_advice = "🧘"
 
     lines = [
-        f"✨ {title}",
-        f"📅 {weekday_local}, {date_str}",
-        f"🌀 {labels['day_type']}: {day_type}",
-        f"🕊 {labels['season_mood']}: {season_phrase}",
+        f"{emoji_sign}{title}",
         "",
-        f"💖 {labels['love']}: {love}",
-        f"💼 {labels['work']}: {work}",
-        f"💰 {labels['money']}: {money}",
-        f"🌿 {labels['health']}: {health}",
-        f"🎯 {labels['advice']}: {advice}",
-        f"#️⃣ {labels['number']}: {number}",
-        f"🎨 {labels['color']}: {color}",
+        f"{weekday_local}, {date_str}",
+        "",
+        f"{labels['day_type']} ⚡ {day_type}",
+        "",
+        f"{season_emoji}{labels['season_mood']}: {season_phrase}",
+        f"{emoji_love}{labels['love']}: {love}",
+        f"{emoji_work}{labels['work']}: {work}",
+        f"{emoji_money}{labels['money']}: {money}",
+        f"{emoji_health}{labels['health']}: {health}",
+        f"{emoji_advice}{labels['advice']}: {advice}",
+        "",
+        f"✨{labels['number']}: {number}",
+        f"✨{labels['color']}: {color}",
     ]
+
     return "\n".join(lines)
 
 
@@ -656,6 +712,8 @@ def generate(sign: str, lang: str = "ru") -> str:
 
     return _build_horoscope_text(sign, lang, now, pattern)
 
+
+# ---------- ТАРО ----------
 
 def _tarot_heading(lang: str) -> str:
     if lang == "en":
