@@ -55,6 +55,8 @@ UI = {
         "btn_tarot": "🔮 Еженедельная карта Таро",
         "btn_reminder": "⏰ Настроить напоминание",
         "btn_change_sign": "♻️ Сменить знак",
+        "btn_cancel_reminders": "❌ Отменить напоминания",
+        "btn_back": "⬅️ Назад",
         "reminder_prompt": (
             "Во сколько тебе удобно получать ежедневный гороскоп?\n"
             "Например: 09:00\n\n"
@@ -71,7 +73,6 @@ UI = {
         "stats_by_sign": "⭐️ По знакам:",
         "reminder_time_format": "Пожалуйста, введи время в формате ЧЧ:ММ, например 09:00.",
         "lang_set": "Язык сохранён: Русский.",
-        "horoscope_button_pattern": "гороскоп",
     },
     "en": {
         "choose_lang": "Choose your language:",
@@ -83,6 +84,8 @@ UI = {
         "btn_tarot": "🔮 Weekly Tarot card",
         "btn_reminder": "⏰ Set reminder",
         "btn_change_sign": "♻️ Change sign",
+        "btn_cancel_reminders": "❌ Cancel reminders",
+        "btn_back": "⬅️ Back",
         "reminder_prompt": (
             "What time should I send your daily horoscope?\n"
             "For example: 09:00\n\n"
@@ -99,7 +102,6 @@ UI = {
         "stats_by_sign": "⭐️ By signs:",
         "reminder_time_format": "Please enter time in HH:MM format, e.g. 09:00.",
         "lang_set": "Language set to English.",
-        "horoscope_button_pattern": "horoscope",
     },
     "es": {
         "choose_lang": "Elige un idioma:",
@@ -111,6 +113,8 @@ UI = {
         "btn_tarot": "🔮 Carta de Tarot semanal",
         "btn_reminder": "⏰ Configurar recordatorio",
         "btn_change_sign": "♻️ Cambiar signo",
+        "btn_cancel_reminders": "❌ Desactivar recordatorios",
+        "btn_back": "⬅️ Atrás",
         "reminder_prompt": (
             "¿A qué hora quieres recibir tu horóscopo diario?\n"
             "Por ejemplo: 09:00\n\n"
@@ -127,10 +131,23 @@ UI = {
         "stats_by_sign": "⭐️ Por signos:",
         "reminder_time_format": "Introduce la hora en formato HH:MM, por ejemplo 09:00.",
         "lang_set": "Idioma configurado: Español.",
-        "horoscope_button_pattern": "horóscopo",
     },
 }
 
+# наборы для хендлера отмены/назад
+CANCEL_BUTTONS = {
+    UI["ru"]["btn_cancel_reminders"],
+    UI["en"]["btn_cancel_reminders"],
+    UI["es"]["btn_cancel_reminders"],
+}
+BACK_BUTTONS = {
+    UI["ru"]["btn_back"],
+    UI["en"]["btn_back"],
+    UI["es"]["btn_back"],
+}
+
+
+# ---------- state helpers ----------
 
 def load_users_state() -> Dict[str, Any]:
     if not USERS_FILE.exists():
@@ -183,6 +200,8 @@ def get_tarot_image_path(image_name: str) -> Optional[Path]:
     return None
 
 
+# ---------- keyboards ----------
+
 def build_sign_keyboard(lang: str) -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     row = []
@@ -225,15 +244,17 @@ def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
 
 
 def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(KeyboardButton("07:00"), KeyboardButton("08:00"), KeyboardButton("09:00"))
     kb.row(KeyboardButton("10:00"), KeyboardButton("11:00"), KeyboardButton("12:00"))
     kb.row(KeyboardButton("18:00"), KeyboardButton("20:00"), KeyboardButton("22:00"))
-    # Кнопки управления пока общие
-    kb.row(KeyboardButton("❌ Отменить напоминания"))
-    kb.row(KeyboardButton("⬅️ Назад"))
+    kb.row(KeyboardButton(ui["btn_cancel_reminders"]))
+    kb.row(KeyboardButton(ui["btn_back"]))
     return kb
 
+
+# ---------- bot init ----------
 
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not API_TOKEN:
@@ -245,12 +266,13 @@ dp = Dispatcher(bot)
 WAITING_FOR_TIME = set()
 
 
+# ---------- handlers ----------
+
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
     user = get_user(message.chat.id)
     lang = user.get("lang")
 
-    # Первый старт — выбираем язык
     if not lang:
         await message.answer(UI["ru"]["choose_lang"], reply_markup=build_lang_keyboard())
         return
@@ -338,7 +360,12 @@ async def handle_lang_choice(message: types.Message):
         await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
 
 
-@dp.message_handler(lambda m: m.text and m.text.startswith(tuple(SIGN_EMOJIS.values())))
+# выбор знака – теперь фильтр строже: только кнопки вида "🐏 Aries", без "—"
+@dp.message_handler(
+    lambda m: m.text
+    and m.text.startswith(tuple(SIGN_EMOJIS.values()))
+    and "—" not in m.text  # важно, чтобы не ловить кнопку гороскопа
+)
 async def handle_sign_choice(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
@@ -348,7 +375,6 @@ async def handle_sign_choice(message: types.Message):
         return
     label = parts[1].strip()
 
-    # Находим внутренний знак по локализованному имени
     base_sign = None
     for s in ZODIAC_SIGNS:
         if SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(s, s) == label:
@@ -388,9 +414,9 @@ async def handle_today_horoscope(message: types.Message):
 
 
 @dp.message_handler(lambda m: m.text and (
-    m.text == UI["ru"]["btn_change_sign"] or
-    m.text == UI["en"]["btn_change_sign"] or
-    m.text == UI["es"]["btn_change_sign"]
+    m.text == UI["ru"]["btn_change_sign"]
+    or m.text == UI["en"]["btn_change_sign"]
+    or m.text == UI["es"]["btn_change_sign"]
 ))
 async def handle_change_sign(message: types.Message):
     lang = get_user_lang(message.chat.id)
@@ -435,13 +461,14 @@ async def handle_set_reminder(message: types.Message):
     await message.answer(ui["reminder_prompt"], reply_markup=build_time_keyboard(lang))
 
 
-@dp.message_handler(lambda m: m.text in {"❌ Отменить напоминания", "⬅️ Назад"})
+@dp.message_handler(lambda m: m.text in CANCEL_BUTTONS.union(BACK_BUTTONS))
 async def handle_cancel_or_back(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
     ui = UI[lang]
+    text = message.text
 
-    if message.text == "❌ Отменить напоминания":
+    if text in CANCEL_BUTTONS:
         update_user(chat_id, notify=False)
         WAITING_FOR_TIME.discard(chat_id)
         sign = get_user(chat_id).get("sign") or ZODIAC_SIGNS[0]
@@ -478,6 +505,8 @@ async def handle_any_message(message: types.Message):
         else:
             await message.answer(ui["unknown"], reply_markup=build_main_keyboard(sign, lang))
 
+
+# ---------- scheduler ----------
 
 async def scheduler(dp: Dispatcher):
     while True:
