@@ -12,7 +12,7 @@ ASTRO_STATE_FILE = BASE_DIR / "astro_state.json"
 # Timezone (Spain)
 TZ = pytz.timezone("Europe/Madrid")
 
-# Внутренние имена знаков – как и раньше, по-русски
+# Внутренние имена знаков (как и раньше, по-русски — для состояния)
 ZODIAC_SIGNS = [
     "Овен",
     "Телец",
@@ -29,6 +29,52 @@ ZODIAC_SIGNS = [
 ]
 
 SUPPORTED_LANGS = ["ru", "en", "es"]
+
+# Локализованные названия знаков
+SIGN_NAMES = {
+    "ru": {
+        "Овен": "Овен",
+        "Телец": "Телец",
+        "Близнецы": "Близнецы",
+        "Рак": "Рак",
+        "Лев": "Лев",
+        "Дева": "Дева",
+        "Весы": "Весы",
+        "Скорпион": "Скорпион",
+        "Стрелец": "Стрелец",
+        "Козерог": "Козерог",
+        "Водолей": "Водолей",
+        "Рыбы": "Рыбы",
+    },
+    "en": {
+        "Овен": "Aries",
+        "Телец": "Taurus",
+        "Близнецы": "Gemini",
+        "Рак": "Cancer",
+        "Лев": "Leo",
+        "Дева": "Virgo",
+        "Весы": "Libra",
+        "Скорпион": "Scorpio",
+        "Стрелец": "Sagittarius",
+        "Козерог": "Capricorn",
+        "Водолей": "Aquarius",
+        "Рыбы": "Pisces",
+    },
+    "es": {
+        "Овен": "Aries",
+        "Телец": "Tauro",
+        "Близнецы": "Géminis",
+        "Рак": "Cáncer",
+        "Лев": "Leo",
+        "Дева": "Virgo",
+        "Весы": "Libra",
+        "Скорпион": "Escorpio",
+        "Стрелец": "Sagitario",
+        "Козерог": "Capricornio",
+        "Водолей": "Acuario",
+        "Рыбы": "Piscis",
+    },
+}
 
 # ------------- Phrase dictionaries -------------
 
@@ -313,23 +359,14 @@ PHRASES = {
 
 NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-
-# -------- TAROT CARDS (language–independent ids) --------
+# -------- TAROT CARDS --------
 
 TAROT_CARDS = [
     {
         "id": "fool",
         "image": "Шут.png",
-        "title": {
-            "ru": "Шут",
-            "en": "The Fool",
-            "es": "El Loco",
-        },
-        "short": {
-            "ru": "новый шаг",
-            "en": "a new step",
-            "es": "un nuevo paso",
-        },
+        "title": {"ru": "Шут", "en": "The Fool", "es": "El Loco"},
+        "short": {"ru": "новый шаг", "en": "a new step", "es": "un nuevo paso"},
         "meaning": {
             "ru": "Новый шаг, лёгкость, игривость. День для спонтанных, но мягких решений.",
             "en": "A new step, lightness and playfulness. A day for spontaneous but gentle decisions.",
@@ -339,16 +376,8 @@ TAROT_CARDS = [
     {
         "id": "magician",
         "image": "маг.png",
-        "title": {
-            "ru": "Маг",
-            "en": "The Magician",
-            "es": "El Mago",
-        },
-        "short": {
-            "ru": "фокус и воля",
-            "en": "focus and will",
-            "es": "foco y voluntad",
-        },
+        "title": {"ru": "Маг", "en": "The Magician", "es": "El Mago"},
+        "short": {"ru": "фокус и воля", "en": "focus and will", "es": "foco y voluntad"},
         "meaning": {
             "ru": "Сила намерения, контроль и фокус. Хороший момент начать что-то важное.",
             "en": "Power of intention, control and focus. A good moment to start something important.",
@@ -358,16 +387,8 @@ TAROT_CARDS = [
     {
         "id": "priestess",
         "image": "Верховная жрица.png",
-        "title": {
-            "ru": "Верховная жрица",
-            "en": "The High Priestess",
-            "es": "La Sacerdotisa",
-        },
-        "short": {
-            "ru": "интуиция и тишина",
-            "en": "intuition and silence",
-            "es": "intuición y silencio",
-        },
+        "title": {"ru": "Верховная жрица", "en": "The High Priestess", "es": "La Sacerdotisa"},
+        "short": {"ru": "интуиция и тишина", "en": "intuition and silence", "es": "intuición y silencio"},
         "meaning": {
             "ru": "Интуиция, внутренний голос, мудрость. Хороший день прислушаться к себе и не спешить.",
             "en": "Intuition, inner voice and wisdom. A good day to listen to yourself and not rush.",
@@ -377,16 +398,8 @@ TAROT_CARDS = [
     {
         "id": "empress",
         "image": "Императрица.png",
-        "title": {
-            "ru": "Императрица",
-            "en": "The Empress",
-            "es": "La Emperatriz",
-        },
-        "short": {
-            "ru": "забота и рост",
-            "en": "care and growth",
-            "es": "cuidado y crecimiento",
-        },
+        "title": {"ru": "Императрица", "en": "The Empress", "es": "La Emperatriz"},
+        "short": {"ru": "забота и рост", "en": "care and growth", "es": "cuidado y crecimiento"},
         "meaning": {
             "ru": "Творчество, забота и рост. Отличный день для создания уюта и поддержки близких.",
             "en": "Creativity, care and growth. A great day to create comfort and support loved ones.",
@@ -396,16 +409,8 @@ TAROT_CARDS = [
     {
         "id": "emperor",
         "image": "Император.png",
-        "title": {
-            "ru": "Император",
-            "en": "The Emperor",
-            "es": "El Emperador",
-        },
-        "short": {
-            "ru": "структура и опора",
-            "en": "structure and support",
-            "es": "estructura y apoyo",
-        },
+        "title": {"ru": "Император", "en": "The Emperor", "es": "El Emperador"},
+        "short": {"ru": "структура и опора", "en": "structure and support", "es": "estructura y apoyo"},
         "meaning": {
             "ru": "Структура, порядок, уверенность. Сделай шаг, который укрепляет тебя и твои планы.",
             "en": "Structure, order, confidence. Make a step that strengthens you and your plans.",
@@ -415,16 +420,8 @@ TAROT_CARDS = [
     {
         "id": "hierophant",
         "image": "Иерофант.png",
-        "title": {
-            "ru": "Иерофант",
-            "en": "The Hierophant",
-            "es": "El Hierofante",
-        },
-        "short": {
-            "ru": "опыт и традиции",
-            "en": "experience and traditions",
-            "es": "experiencia y tradiciones",
-        },
+        "title": {"ru": "Иерофант", "en": "The Hierophant", "es": "El Hierofante"},
+        "short": {"ru": "опыт и традиции", "en": "experience and traditions", "es": "experiencia y tradiciones"},
         "meaning": {
             "ru": "Опора на знания, опыт и совет. День, чтобы учиться или делиться тем, что ты знаешь.",
             "en": "Support of knowledge, experience and advice. A day to learn or share what you know.",
@@ -434,16 +431,8 @@ TAROT_CARDS = [
     {
         "id": "lovers",
         "image": "Влюбленные.png",
-        "title": {
-            "ru": "Влюблённые",
-            "en": "The Lovers",
-            "es": "Los Enamorados",
-        },
-        "short": {
-            "ru": "выбор сердцем",
-            "en": "choice by heart",
-            "es": "elección con el corazón",
-        },
+        "title": {"ru": "Влюблённые", "en": "The Lovers", "es": "Los Enamorados"},
+        "short": {"ru": "выбор сердцем", "en": "choice by heart", "es": "elección con el corazón"},
         "meaning": {
             "ru": "Выбор сердцем, гармония и связь. Хороший момент уделить внимание отношениям и важным решениям.",
             "en": "Choice by heart, harmony and connection. Good moment to focus on relationships and key decisions.",
@@ -453,16 +442,8 @@ TAROT_CARDS = [
     {
         "id": "chariot",
         "image": "Колесница.png",
-        "title": {
-            "ru": "Колесница",
-            "en": "The Chariot",
-            "es": "El Carro",
-        },
-        "short": {
-            "ru": "движение вперёд",
-            "en": "moving forward",
-            "es": "avance hacia adelante",
-        },
+        "title": {"ru": "Колесница", "en": "The Chariot", "es": "El Carro"},
+        "short": {"ru": "движение вперёд", "en": "moving forward", "es": "avance hacia adelante"},
         "meaning": {
             "ru": "Движение вперёд, победа, контроль. Время взять ситуацию в свои руки и сделать шаг к цели.",
             "en": "Movement forward, victory, control. Time to take the situation in your hands and step toward your goal.",
@@ -472,16 +453,8 @@ TAROT_CARDS = [
     {
         "id": "strength",
         "image": "Сила.png",
-        "title": {
-            "ru": "Сила",
-            "en": "Strength",
-            "es": "La Fuerza",
-        },
-        "short": {
-            "ru": "мягкая уверенность",
-            "en": "gentle confidence",
-            "es": "confianza suave",
-        },
+        "title": {"ru": "Сила", "en": "Strength", "es": "La Fuerza"},
+        "short": {"ru": "мягкая уверенность", "en": "gentle confidence", "es": "confianza suave"},
         "meaning": {
             "ru": "Мягкая сила, терпение и уверенность. Спокойная опора важнее, чем давление на себя и других.",
             "en": "Soft strength, patience and confidence. Calm support is more important than pressure.",
@@ -491,16 +464,8 @@ TAROT_CARDS = [
     {
         "id": "star",
         "image": "Звезда.png",
-        "title": {
-            "ru": "Звезда",
-            "en": "The Star",
-            "es": "La Estrella",
-        },
-        "short": {
-            "ru": "тихая надежда",
-            "en": "quiet hope",
-            "es": "esperanza tranquila",
-        },
+        "title": {"ru": "Звезда", "en": "The Star", "es": "La Estrella"},
+        "short": {"ru": "тихая надежда", "en": "quiet hope", "es": "esperanza tranquila"},
         "meaning": {
             "ru": "Надежда, вдохновение, свет. Можно позволить себе помечтать и наметить добрые планы на будущее.",
             "en": "Hope, inspiration, light. You can allow yourself to dream and outline kind plans for the future.",
@@ -510,16 +475,8 @@ TAROT_CARDS = [
     {
         "id": "sun",
         "image": "Солнце.png",
-        "title": {
-            "ru": "Солнце",
-            "en": "The Sun",
-            "es": "El Sol",
-        },
-        "short": {
-            "ru": "ясность и радость",
-            "en": "clarity and joy",
-            "es": "claridad y alegría",
-        },
+        "title": {"ru": "Солнце", "en": "The Sun", "es": "El Sol"},
+        "short": {"ru": "ясность и радость", "en": "clarity and joy", "es": "claridad y alegría"},
         "meaning": {
             "ru": "Успех, ясность, энергия. День поддерживает простые радости и честный взгляд на жизнь.",
             "en": "Success, clarity, energy. The day supports simple joys and an honest view of life.",
@@ -529,16 +486,8 @@ TAROT_CARDS = [
     {
         "id": "world",
         "image": "Мир.png",
-        "title": {
-            "ru": "Мир",
-            "en": "The World",
-            "es": "El Mundo",
-        },
-        "short": {
-            "ru": "завершение и гармония",
-            "en": "completion and harmony",
-            "es": "cierre y armonía",
-        },
+        "title": {"ru": "Мир", "en": "The World", "es": "El Mundo"},
+        "short": {"ru": "завершение и гармония", "en": "completion and harmony", "es": "cierre y armonía"},
         "meaning": {
             "ru": "Завершение цикла, гармония и внутренняя целостность. Хороший момент что-то закончить и выдохнуть.",
             "en": "End of a cycle, harmony and inner wholeness. A good moment to finish something and exhale.",
@@ -548,16 +497,8 @@ TAROT_CARDS = [
     {
         "id": "hermit",
         "image": "Отшельник.png",
-        "title": {
-            "ru": "Отшельник",
-            "en": "The Hermit",
-            "es": "El Ermitaño",
-        },
-        "short": {
-            "ru": "внутренний путь",
-            "en": "inner path",
-            "es": "camino interior",
-        },
+        "title": {"ru": "Отшельник", "en": "The Hermit", "es": "El Ermitaño"},
+        "short": {"ru": "внутренний путь", "en": "inner path", "es": "camino interior"},
         "meaning": {
             "ru": "Мудрость, уединение, внутренний путь. Полезно побыть наедине с собой и спокойно всё обдумать.",
             "en": "Wisdom, solitude, inner path. It’s helpful to be alone for a while and calmly think things through.",
@@ -600,7 +541,6 @@ def get_season(now: datetime) -> str:
 
 def _random_pattern(now: datetime) -> Dict[str, Any]:
     season_key = get_season(now)
-    # используем длины русского набора как эталон (во всех языках одинаковое количество фраз)
     ru = PHRASES["ru"]
     season_idx = random.randrange(len(ru["season"][season_key]))
     day_type_idx = random.randrange(len(ru["day_types"]))
@@ -635,6 +575,8 @@ def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str
 
     labels = ph["labels"]
 
+    display_sign = SIGN_NAMES.get(lang, {}).get(sign, sign)
+
     season_key = pattern["season_key"]
     season_idx = pattern["season_idx"]
     day_type_idx = pattern["day_type_idx"]
@@ -655,7 +597,7 @@ def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str
     advice = ph["advice"][advice_idx]
     color = ph["colors"][color_idx]
 
-    title = labels["title"].format(sign=sign)
+    title = labels["title"].format(sign=display_sign)
 
     lines = [
         f"✨ {title}",
@@ -677,10 +619,8 @@ def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str
 def generate(sign: str, lang: str = "ru") -> str:
     """
     Генерирует гороскоп для знака на сегодня в выбранном языке.
-
     Один паттерн (набор индексов фраз) на знак в день,
     текст рендерится в нужном языке из этого паттерна.
-    Анти-повтор для ~14 дней по паттерну.
     """
     now = datetime.now(TZ)
     today_str = now.date().isoformat()
