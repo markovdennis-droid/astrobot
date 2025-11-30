@@ -305,13 +305,13 @@ def generate(sign: str) -> str:
 def draw_tarot_for_user(user_id: int) -> Dict[str, Any]:
     """
     ЕЖЕНЕДЕЛЬНАЯ карта Таро.
+    Новая карта доступна раз в 7 дней.
     Возвращает:
     {
         "text": "...",
         "already_drawn": True/False,
         "card_name": "Имя карты"
     }
-    Новая карта доступна раз в 7 дней.
     """
     now = datetime.now(TZ)
     today = now.date()
