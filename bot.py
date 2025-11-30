@@ -6,25 +6,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-from generator import generate as raw_generate, draw_tarot_for_user, ZODIAC_SIGNS, TZ
+from generator import generate, draw_tarot_for_user, ZODIAC_SIGNS, TZ
 
 BASE_DIR = Path(__file__).parent
 USERS_FILE = BASE_DIR / "users_state.json"
-TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"  # сюда класть картинки карт
+TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------- НАСТРОЙКИ АДМИНА ДЛЯ /stats ----------
-
-# Если ADMIN_ID = 0, команду /stats может вызывать любой
-# Если ADMIN_ID != 0 — только этот chat_id
 ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 
-# Эмодзи для знаков
 SIGN_EMOJIS = {
     "Овен": "🐏",
     "Телец": "🐂",
@@ -40,190 +35,92 @@ SIGN_EMOJIS = {
     "Рыбы": "🐟",
 }
 
+SUPPORTED_LANGS = ["ru", "en", "es"]
 
-def _extract_value(line: str, key: str) -> str:
-    """
-    Вспомогательная функция: достаём часть после ключа.
-    Пример:
-    "🌀 Тип дня: гармоничный день" + key="Тип дня" -> "гармоничный день"
-    """
-    if not line:
-        return ""
-    try:
-        line = line.strip()
-        idx = line.find(key)
-        if idx == -1:
-            # если ключ не нашли — просто убираем эмодзи и возвращаем текст
-            return line.lstrip("✨📅🌀🕊💖💼💰🌿🎯#️⃣🎨 ").strip()
-        sub = line[idx + len(key):].strip()
-        if sub.startswith(":"):
-            sub = sub[1:].strip()
-        return sub
-    except Exception:
-        return line.strip()
+UI = {
+    "ru": {
+        "choose_lang": "Выберите язык:",
+        "btn_lang_ru": "🇷🇺 Русский",
+        "btn_lang_en": "🇬🇧 English",
+        "btn_lang_es": "🇪🇸 Español",
+        "start_no_sign": "✨ Привет! Я астробот.\n\nВыбери свой знак зодиака:",
+        "start_with_sign": "Снова привет, {name}!\n\nТвой текущий знак: {sign}.\n",
+        "btn_tarot": "🔮 Еженедельная карта Таро",
+        "btn_reminder": "⏰ Настроить напоминание",
+        "btn_change_sign": "♻️ Сменить знак",
+        "reminder_prompt": (
+            "Во сколько тебе удобно получать ежедневный гороскоп?\n"
+            "Например: 09:00\n\n"
+            "Или выбери время из предложенных вариантов:"
+        ),
+        "reminder_set": "Отлично! Я буду отправлять гороскоп каждый день в {time}.",
+        "reminder_cleared": "Ежедневные напоминания отключены.",
+        "back_to_menu": "Возвращаю в главное меню.",
+        "need_sign": "Сначала выбери свой знак зодиака:",
+        "unknown": "Я тебя не понял. Используй кнопки ниже 🙂",
+        "tarot_already": "Ты уже вытянул карту на этой неделе 🙂\nСледующую можно будет получить через 7 дней.",
+        "stats_header_users": "👥 Всего пользователей: {total}",
+        "stats_header_notify": "⏰ С включёнными напоминаниями: {with_notify}",
+        "stats_by_sign": "⭐️ По знакам:",
+        "reminder_time_format": "Пожалуйста, введи время в формате ЧЧ:ММ, например 09:00.",
+        "lang_set": "Язык сохранён: Русский.",
+    },
+    "en": {
+        "choose_lang": "Choose your language:",
+        "btn_lang_ru": "🇷🇺 Русский",
+        "btn_lang_en": "🇬🇧 English",
+        "btn_lang_es": "🇪🇸 Español",
+        "start_no_sign": "✨ Hi! I am AstroBot.\n\nChoose your zodiac sign:",
+        "start_with_sign": "Hi again, {name}!\n\nYour current sign: {sign}.\n",
+        "btn_tarot": "🔮 Weekly Tarot card",
+        "btn_reminder": "⏰ Set reminder",
+        "btn_change_sign": "♻️ Change sign",
+        "reminder_prompt": (
+            "What time should I send your daily horoscope?\n"
+            "For example: 09:00\n\n"
+            "Or choose from the options below:"
+        ),
+        "reminder_set": "Great! I will send your horoscope every day at {time}.",
+        "reminder_cleared": "Daily reminders are turned off.",
+        "back_to_menu": "Back to main menu.",
+        "need_sign": "First choose your zodiac sign:",
+        "unknown": "I didn’t understand. Please use the buttons below 🙂",
+        "tarot_already": "You already drew a card for this week 🙂\nYou can draw a new one in 7 days.",
+        "stats_header_users": "👥 Total users: {total}",
+        "stats_header_notify": "⏰ With reminders: {with_notify}",
+        "stats_by_sign": "⭐️ By signs:",
+        "reminder_time_format": "Please enter time in HH:MM format, e.g. 09:00.",
+        "lang_set": "Language set to English.",
+    },
+    "es": {
+        "choose_lang": "Elige un idioma:",
+        "btn_lang_ru": "🇷🇺 Русский",
+        "btn_lang_en": "🇬🇧 English",
+        "btn_lang_es": "🇪🇸 Español",
+        "start_no_sign": "✨ ¡Hola! Soy AstroBot.\n\nElige tu signo del zodiaco:",
+        "start_with_sign": "Hola de nuevo, {name}!\n\nTu signo actual: {sign}.\n",
+        "btn_tarot": "🔮 Carta de Tarot semanal",
+        "btn_reminder": "⏰ Configurar recordatorio",
+        "btn_change_sign": "♻️ Cambiar signo",
+        "reminder_prompt": (
+            "¿A qué hora quieres recibir tu horóscopo diario?\n"
+            "Por ejemplo: 09:00\n\n"
+            "O elige una hora de la lista:"
+        ),
+        "reminder_set": "¡Perfecto! Enviaré tu horóscopo cada día a las {time}.",
+        "reminder_cleared": "Los recordatorios diarios están desactivados.",
+        "back_to_menu": "Volviendo al menú principal.",
+        "need_sign": "Primero elige tu signo del zodiaco:",
+        "unknown": "No te he entendido. Usa los botones de abajo 🙂",
+        "tarot_already": "Ya has sacado tu carta de esta semana 🙂\nPodrás sacar otra dentro de 7 días.",
+        "stats_header_users": "👥 Usuarios totales: {total}",
+        "stats_header_notify": "⏰ Con recordatorios: {with_notify}",
+        "stats_by_sign": "⭐️ Por signos:",
+        "reminder_time_format": "Introduce la hora en formato HH:MM, por ejemplo 09:00.",
+        "lang_set": "Idioma configurado: Español.",
+    },
+}
 
-
-def _get_season_emoji(now: datetime) -> str:
-    """
-    Возвращает эмодзи сезона в зависимости от месяца:
-    зима ❄️, весна 🌸, лето ☀️, осень 🍁
-    """
-    month = now.month
-    if month in (12, 1, 2):
-        return "❄️"
-    elif month in (3, 4, 5):
-        return "🌸"
-    elif month in (6, 7, 8):
-        return "☀️"
-    else:
-        return "🍁"
-
-
-def format_horoscope_message(sign: str) -> str:
-    """
-    Форматируем текст гороскопа в раскладку.
-    """
-    raw = raw_generate(sign)
-    emoji = SIGN_EMOJIS.get(sign, "⭐️")
-    now = datetime.now(TZ)
-    season_emoji = _get_season_emoji(now)
-
-    # ----- Вариант 1: generate() отдаёт dict -----
-    if isinstance(raw, dict):
-        weekday = raw.get("weekday") or now.strftime("%A")
-        date_str = raw.get("date") or now.strftime("%d.%m.%Y")
-
-        day_type = raw.get("day_type_text", "")
-        day_type_emoji = raw.get("day_type_emoji", "⚡")
-
-        season = raw.get("season") or raw.get("season_mood") or ""
-        love = raw.get("love") or ""
-        work = raw.get("work") or ""
-        money = raw.get("money") or ""
-        health = raw.get("health") or ""
-        advice = raw.get("advice") or ""
-        number = raw.get("number") or raw.get("day_number") or ""
-        color = raw.get("color") or raw.get("day_color") or ""
-
-        lines = [
-            f"{emoji} {sign} — гороскоп на сегодня",
-            "",
-            f"{weekday}, {date_str}",
-            "",
-            (f"Тип дня {day_type_emoji} {day_type}".strip()) if day_type else "",
-            "",
-            (f"{season_emoji} Сезонный настрой: {season}".strip()) if season else "",
-            (f"💕 Любовь: {love}".strip()) if love else "",
-            (f"👩‍💻 Работа: {work}".strip()) if work else "",
-            (f"💰 Деньги: {money}".strip()) if money else "",
-            (f"🩺 Здоровье: {health}".strip()) if health else "",
-            (f"🧘 Совет: {advice}".strip()) if advice else "",
-            "",
-            (f"✨ Число дня: {number}".strip()) if number else "",
-            (f"✨ Цвет дня: {color}".strip()) if color else "",
-        ]
-        cleaned = [l for l in lines if l and not l.isspace()]
-        return "\n".join(cleaned)
-
-    # ----- Вариант 2: generate() отдаёт строку (текущий случай) -----
-    if isinstance(raw, str):
-        lines_in = [l.strip() for l in raw.splitlines() if l.strip()]
-
-        # Дата (строка с 📅 или чем-то типа "Суббота, 29.11.2025")
-        date_src = ""
-        for l in lines_in:
-            if "📅" in l or ("," in l and "." in l):
-                date_src = l
-                break
-        date_clean = date_src.lstrip("📅").strip()
-        if not date_clean:
-            # запасной вариант, если не нашли
-            weekday = now.strftime("%A")
-            date_clean = f"{weekday}, {now.strftime('%d.%m.%Y')}"
-
-        # Остальные блоки
-        day_type_src = next((l for l in lines_in if "Тип дня" in l), "")
-        season_src = next((l for l in lines_in if "Сезонный настрой" in l), "")
-        love_src = next((l for l in lines_in if "Любовь" in l), "")
-        work_src = next((l for l in lines_in if "Работа" in л), "") if (л := "Работа") else next((l for l in lines_in if "Работа" in l), "")
-        money_src = next((l for l in lines_in if "Деньги" in l), "")
-        health_src = next((l for l in lines_in if "Здоровье" in l), "")
-        advice_src = next((l for l in lines_in if "Совет" in l), "")
-        number_src = next((l for l in lines_in if "Число дня" in l), "")
-        color_src = next((l for l in lines_in if "Цвет дня" in l), "")
-
-        day_type = _extract_value(day_type_src, "Тип дня")
-        season = _extract_value(season_src, "Сезонный настрой")
-        love = _extract_value(love_src, "Любовь")
-        work = _extract_value(work_src, "Работа")
-        money = _extract_value(money_src, "Деньги")
-        health = _extract_value(health_src, "Здоровье")
-        advice = _extract_value(advice_src, "Совет")
-        number = _extract_value(number_src, "Число дня").rstrip(".")
-        color = _extract_value(color_src, "Цвет дня")
-
-        out_lines = [
-            f"{emoji} {sign} — гороскоп на сегодня",
-            "",
-            date_clean,
-            "",
-            (f"Тип дня ⚡ {day_type}".strip()) if day_type else "",
-            "",
-            (f"{season_emoji} Сезонный настрой: {season}".strip()) if season else "",
-            (f"💕 Любовь: {love}".strip()) if love else "",
-            (f"👩‍💻 Работа: {work}".strip()) if work else "",
-            (f"💰 Деньги: {money}".strip()) if money else "",
-            (f"🩺 Здоровье: {health}".strip()) if health else "",
-            (f"🧘 Совет: {advice}".strip()) if advice else "",
-            "",
-            (f"✨ Число дня: {number}".strip()) if number else "",
-            (f"✨ Цвет дня: {color}".strip()) if color else "",
-        ]
-        cleaned = [l for l in out_lines if l and not l.isspace()]
-        return "\n".join(cleaned)
-
-    # Фолбэк — просто строка
-    return str(raw)
-
-
-# ---------- Таро: поиск картинки ----------
-
-def get_tarot_image_path(card_name: str) -> Optional[Path]:
-    """
-    Ищем файл картинки для карты Таро по имени.
-    Ожидаем файлы в папке tarot_images:
-    - tarot_images/Шут.png
-    - tarot_images/Колесница.jpg
-    и т.п.
-
-    Сначала пробуем точное совпадение, потом более мягкий вариант (без регистра).
-    """
-    if not card_name:
-        return None
-
-    if not TAROT_IMAGES_DIR.exists():
-        return None
-
-    # точное совпадение по имени
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        candidate = TAROT_IMAGES_DIR / f"{card_name}{ext}"
-        if candidate.exists():
-            return candidate
-
-    # мягкий поиск: без регистра и лишних пробелов
-    norm = card_name.strip().lower()
-    for path in TAROT_IMAGES_DIR.iterdir():
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
-            continue
-        if path.stem.strip().lower() == norm:
-            return path
-
-    return None
-
-
-# ---------- Работа с состоянием пользователей ----------
 
 def load_users_state() -> Dict[str, Any]:
     if not USERS_FILE.exists():
@@ -231,17 +128,13 @@ def load_users_state() -> Dict[str, Any]:
     try:
         with open(USERS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        logger.exception("Не удалось прочитать users_state.json: %s", e)
+    except Exception:
         return {}
 
 
 def save_users_state(state: Dict[str, Any]) -> None:
-    try:
-        with open(USERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.exception("Не удалось сохранить users_state.json: %s", e)
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
 
 
 def get_user(chat_id: int) -> Dict[str, Any]:
@@ -256,13 +149,29 @@ def update_user(chat_id: int, **fields) -> Dict[str, Any]:
     user.setdefault("sign", None)
     user.setdefault("notify", False)
     user.setdefault("time", "09:00")
+    user.setdefault("lang", "ru")
     user.update(fields)
     state[key] = user
     save_users_state(state)
     return user
 
 
-# ---------- Клавиатуры ----------
+def get_user_lang(chat_id: int) -> str:
+    user = get_user(chat_id)
+    lang = user.get("lang") or "ru"
+    if lang not in SUPPORTED_LANGS:
+        lang = "ru"
+    return lang
+
+
+def get_tarot_image_path(image_name: str) -> Optional[Path]:
+    if not image_name:
+        return None
+    path = TAROT_IMAGES_DIR / image_name
+    if path.exists():
+        return path
+    return None
+
 
 def build_sign_keyboard() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -278,79 +187,87 @@ def build_sign_keyboard() -> ReplyKeyboardMarkup:
     return kb
 
 
-def build_main_keyboard(sign: str) -> ReplyKeyboardMarkup:
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    emoji = SIGN_EMOJIS.get(sign, "⭐️")
-    kb.row(KeyboardButton(f"{emoji} {sign} — гороскоп на сегодня"))
-    kb.row(KeyboardButton("🔮 Еженедельная карта Таро"))
-    kb.row(KeyboardButton("⏰ Настроить напоминание"))
-    kb.row(KeyboardButton("♻️ Сменить знак"))
+def build_lang_keyboard() -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.row(KeyboardButton(UI["ru"]["btn_lang_ru"]))
+    kb.row(KeyboardButton(UI["ru"]["btn_lang_en"]))
+    kb.row(KeyboardButton(UI["ru"]["btn_lang_es"]))
     return kb
 
 
-def build_time_keyboard() -> ReplyKeyboardMarkup:
+def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
+    ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(
-        KeyboardButton("07:00"),
-        KeyboardButton("08:00"),
-        KeyboardButton("09:00"),
-    )
-    kb.row(
-        KeyboardButton("10:00"),
-        KeyboardButton("11:00"),
-        KeyboardButton("12:00"),
-    )
-    kb.row(
-        KeyboardButton("18:00"),
-        KeyboardButton("20:00"),
-        KeyboardButton("22:00"),
-    )
+    emoji = SIGN_EMOJIS.get(sign, "⭐️")
+    if lang == "ru":
+        title = f"{emoji} {sign} — гороскоп на сегодня"
+    elif lang == "en":
+        title = f"{emoji} {sign} — horoscope for today"
+    else:
+        title = f"{emoji} {sign} — horóscopo para hoy"
+    kb.row(KeyboardButton(title))
+    kb.row(KeyboardButton(ui["btn_tarot"]))
+    kb.row(KeyboardButton(ui["btn_reminder"]))
+    kb.row(KeyboardButton(ui["btn_change_sign"]))
+    return kb
+
+
+def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row(KeyboardButton("07:00"), KeyboardButton("08:00"), KeyboardButton("09:00"))
+    kb.row(KeyboardButton("10:00"), KeyboardButton("11:00"), KeyboardButton("12:00"))
+    kb.row(KeyboardButton("18:00"), KeyboardButton("20:00"), KeyboardButton("22:00"))
+    # Кнопки управления — пока на русском, но логика единая для всех
     kb.row(KeyboardButton("❌ Отменить напоминания"))
     kb.row(KeyboardButton("⬅️ Назад"))
     return kb
 
 
-# ---------- Инициализация бота ----------
-
 API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not API_TOKEN:
-    raise RuntimeError("Не найден TELEGRAM_BOT_TOKEN в переменных окружения.")
+    raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 
 bot = Bot(API_TOKEN)
 dp = Dispatcher(bot)
 
-# простая память: кто сейчас вводит время
 WAITING_FOR_TIME = set()
 
-
-# ---------- Команды и хендлеры ----------
 
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
     user = get_user(message.chat.id)
+    lang = user.get("lang")
+
+    # Первый старт – выбор языка
+    if not lang:
+        await message.answer(UI["ru"]["choose_lang"], reply_markup=build_lang_keyboard())
+        return
+
+    if lang not in SUPPORTED_LANGS:
+        lang = "ru"
+        update_user(message.chat.id, lang=lang)
+
+    ui = UI[lang]
     sign = user.get("sign")
     if sign:
-        text = (
-            f"Снова привет, {message.from_user.first_name}!\n\n"
-            f"Твой текущий знак: {sign}.\n"
-            "Могу показать гороскоп на сегодня, еженедельную карту Таро и "
-            "отправлять ежедневные прогнозы.\n\n"
-            "Нажми кнопку ниже, чтобы получить гороскоп 👇"
-        )
-        await message.answer(text, reply_markup=build_main_keyboard(sign))
+        extra = {
+            "ru": "Нажми кнопку ниже, чтобы получить гороскоп 👇",
+            "en": "Tap the button below to get your horoscope 👇",
+            "es": "Pulsa el botón de abajo para ver tu horóscopo 👇",
+        }[lang]
+        text = ui["start_with_sign"].format(name=message.from_user.first_name, sign=sign) + "\n" + extra
+        await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
     else:
-        await message.answer(
-            "✨ Привет! Я астробот.\n\nВыбери, пожалуйста, свой знак зодиака:",
-            reply_markup=build_sign_keyboard(),
-        )
+        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard())
 
 
-# /stats — показывает количество пользователей и разбивку по знакам
 @dp.message_handler(commands=["stats"])
 async def cmd_stats(message: types.Message):
-    # если ADMIN_ID = 0 — можно всем, иначе только указанному id
     if ADMIN_ID != 0 and message.chat.id != ADMIN_ID:
         return
+
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
 
     state = load_users_state()
     total_users = len(state)
@@ -362,10 +279,10 @@ async def cmd_stats(message: types.Message):
         by_sign[sign] = by_sign.get(sign, 0) + 1
 
     lines = [
-        f"👥 Всего пользователей: {total_users}",
-        f"⏰ С включёнными напоминаниями: {with_notify}",
+        ui["stats_header_users"].format(total=total_users),
+        ui["stats_header_notify"].format(with_notify=with_notify),
         "",
-        "⭐️ По знакам:",
+        ui["stats_by_sign"],
     ]
     for sign, count in sorted(by_sign.items()):
         lines.append(f"• {sign}: {count}")
@@ -373,7 +290,34 @@ async def cmd_stats(message: types.Message):
     await message.answer("\n".join(lines))
 
 
-# выбор знака: кнопки вида "🐏 Овен"
+@dp.message_handler(lambda m: m.text in {
+    UI["ru"]["btn_lang_ru"],
+    UI["ru"]["btn_lang_en"],
+    UI["ru"]["btn_lang_es"],
+})
+async def handle_lang_choice(message: types.Message):
+    text = message.text
+    if text == UI["ru"]["btn_lang_ru"]:
+        lang = "ru"
+    elif text == UI["ru"]["btn_lang_en"]:
+        lang = "en"
+    else:
+        lang = "es"
+
+    user = update_user(message.chat.id, lang=lang)
+    ui = UI[lang]
+
+    sign = user.get("sign")
+    await message.answer(ui["lang_set"])
+    if sign:
+        await message.answer(
+            ui["start_with_sign"].format(name=message.from_user.first_name, sign=sign),
+            reply_markup=build_main_keyboard(sign, lang),
+        )
+    else:
+        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard())
+
+
 @dp.message_handler(lambda m: m.text and m.text.startswith(tuple(SIGN_EMOJIS.values())))
 async def handle_sign_choice(message: types.Message):
     parts = message.text.split(" ", 1)
@@ -383,147 +327,121 @@ async def handle_sign_choice(message: types.Message):
     if sign not in ZODIAC_SIGNS:
         return
 
+    lang = get_user_lang(message.chat.id)
     update_user(message.chat.id, sign=sign)
-    text = format_horoscope_message(sign)
+    text = generate(sign, lang)
     await message.answer(
-        f"Знак сохранён: {sign}.\n\n{text}",
-        reply_markup=build_main_keyboard(sign),
+        f"{UI[lang]['start_with_sign'].format(name=message.from_user.first_name, sign=sign)}\n{text}",
+        reply_markup=build_main_keyboard(sign, lang),
     )
 
 
-@dp.message_handler(lambda m: m.text == "♻️ Сменить знак")
-async def handle_change_sign(message: types.Message):
-    await message.answer(
-        "Выбери новый знак зодиака:",
-        reply_markup=build_sign_keyboard(),
-    )
-
-
-@dp.message_handler(lambda m: m.text and "гороскоп на сегодня" in m.text)
+@dp.message_handler(lambda m: m.text and any(
+    word in m.text.lower() for word in ("гороскоп", "horoscope", "horóscopo")
+))
 async def handle_today_horoscope(message: types.Message):
     user = get_user(message.chat.id)
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
+
     sign = user.get("sign")
     if not sign:
-        await message.answer(
-            "Сначала выбери свой знак зодиака:",
-            reply_markup=build_sign_keyboard(),
-        )
+        await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
         return
-    text = format_horoscope_message(sign)
-    await message.answer(text, reply_markup=build_main_keyboard(sign))
+
+    text = generate(sign, lang)
+    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
 
 
-# ---------- Еженедельная карта Таро: КАРТИНКА + ОТДЕЛЬНО ТЕКСТ ----------
+@dp.message_handler(lambda m: m.text and (
+    m.text == UI["ru"]["btn_change_sign"] or
+    m.text == UI["en"]["btn_change_sign"] or
+    m.text == UI["es"]["btn_change_sign"]
+))
+async def handle_change_sign(message: types.Message):
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
+    await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
 
-@dp.message_handler(lambda m: m.text in {"🔮 Еженедельная карта Таро", "🔮 Таро дня"})
+
+@dp.message_handler(lambda m: m.text and (
+    "таро" in m.text.lower() or "tarot" in m.text.lower()
+))
 async def handle_tarot(message: types.Message):
-    """
-    Еженедельная карта Таро:
-    - draw_tarot_for_user() сам следит за интервалом в 7 дней
-    - сначала отправляем КАРТИНКУ
-    - затем отдельным сообщением ТЕКСТ
-    """
-    result = draw_tarot_for_user(message.chat.id)
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
+
+    result = draw_tarot_for_user(message.chat.id, lang=lang)
     text = result["text"]
-
-    # дописываем предупреждение, если уже тянул в эту неделю
     if result.get("already_drawn"):
-        text += (
-            "\n\nТы уже вытянул карту на этой неделе 🙂"
-            "\nСледующую можно будет получить через 7 дней."
-        )
+        text += "\n\n" + ui["tarot_already"]
 
-    # пытаемся понять имя карты
-    card_name = (
-        result.get("card_name")
-        or result.get("card")
-        or result.get("name")
-    )
+    img_name = result.get("image")
+    img_path = get_tarot_image_path(img_name)
+    if img_path:
+        try:
+            await message.answer_photo(types.InputFile(str(img_path)))
+        except Exception as e:
+            logger.exception("Не удалось отправить картинку Таро: %s", e)
 
-    # 1) отправляем картинку, если есть
-    if card_name:
-        img_path = get_tarot_image_path(card_name)
-        if img_path and img_path.exists():
-            try:
-                await message.answer_photo(
-                    types.InputFile(str(img_path))
-                )
-            except Exception as e:
-                logger.exception("Не удалось отправить картинку Таро: %s", e)
-
-    # 2) отправляем текст
-    sign = get_user(message.chat.id).get("sign") or "Овен"
-    await message.answer(
-        text,
-        reply_markup=build_main_keyboard(sign),
-    )
+    user = get_user(message.chat.id)
+    sign = user.get("sign") or "Овен"
+    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
 
 
-@dp.message_handler(lambda m: m.text == "⏰ Настроить напоминание")
+@dp.message_handler(lambda m: m.text and any(
+    key in m.text.lower() for key in ("напомин", "reminder", "recordatorio")
+))
 async def handle_set_reminder(message: types.Message):
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
     WAITING_FOR_TIME.add(message.chat.id)
-    await message.answer(
-        "Во сколько тебе удобно получать ежедневный гороскоп?\n"
-        "Например: 09:00\n\n"
-        "Или выбери время из предложенных вариантов:",
-        reply_markup=build_time_keyboard(),
-    )
+    await message.answer(ui["reminder_prompt"], reply_markup=build_time_keyboard(lang))
 
 
 @dp.message_handler(lambda m: m.text in {"❌ Отменить напоминания", "⬅️ Назад"})
 async def handle_cancel_or_back(message: types.Message):
     chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+    ui = UI[lang]
+
     if message.text == "❌ Отменить напоминания":
         update_user(chat_id, notify=False)
-        if chat_id in WAITING_FOR_TIME:
-            WAITING_FOR_TIME.discard(chat_id)
-        await message.answer(
-            "Ежедневные напоминания отключены.",
-            reply_markup=build_main_keyboard(get_user(chat_id).get("sign") or "Овен"),
-        )
+        WAITING_FOR_TIME.discard(chat_id)
+        sign = get_user(chat_id).get("sign") or "Овен"
+        await message.answer(ui["reminder_cleared"], reply_markup=build_main_keyboard(sign, lang))
     else:
-        if chat_id in WAITING_FOR_TIME:
-            WAITING_FOR_TIME.discard(chat_id)
-        await message.answer(
-            "Возвращаю в главное меню.",
-            reply_markup=build_main_keyboard(get_user(chat_id).get("sign") or "Овен"),
-        )
+        WAITING_FOR_TIME.discard(chat_id)
+        sign = get_user(chat_id).get("sign") or "Овен"
+        await message.answer(ui["back_to_menu"], reply_markup=build_main_keyboard(sign, lang))
 
 
 @dp.message_handler()
 async def handle_any_message(message: types.Message):
     chat_id = message.chat.id
-    text = message.text.strip()
+    lang = get_user_lang(chat_id)
+    ui = UI[lang]
+    text = message.text.strip() if message.text else ""
 
     if chat_id in WAITING_FOR_TIME:
         if len(text) == 5 and text[2] == ":" and text[:2].isdigit() and text[3:].isdigit():
             update_user(chat_id, notify=True, time=text)
             WAITING_FOR_TIME.discard(chat_id)
+            sign = get_user(chat_id).get("sign") or "Овен"
             await message.answer(
-                f"Отлично! Я буду отправлять гороскоп каждый день в {text}.",
-                reply_markup=build_main_keyboard(get_user(chat_id).get("sign") or "Овен"),
+                ui["reminder_set"].format(time=text),
+                reply_markup=build_main_keyboard(sign, lang),
             )
         else:
-            await message.answer(
-                "Пожалуйста, введи время в формате ЧЧ:ММ, например 09:00.",
-                reply_markup=build_time_keyboard(),
-            )
+            await message.answer(ui["reminder_time_format"], reply_markup=build_time_keyboard(lang))
     else:
         user = get_user(chat_id)
         sign = user.get("sign")
         if not sign:
-            await message.answer(
-                "Сначала выбери свой знак зодиака:",
-                reply_markup=build_sign_keyboard(),
-            )
+            await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard())
         else:
-            await message.answer(
-                "Я тебя не понял. Используй кнопки ниже 🙂",
-                reply_markup=build_main_keyboard(sign),
-            )
+            await message.answer(ui["unknown"], reply_markup=build_main_keyboard(sign, lang))
 
-
-# ---------- Планировщик ----------
 
 async def scheduler(dp: Dispatcher):
     while True:
@@ -535,15 +453,18 @@ async def scheduler(dp: Dispatcher):
                 sign = info.get("sign")
                 notify = info.get("notify", False)
                 send_time = info.get("time", "09:00")
+                lang = info.get("lang") or "ru"
+                if lang not in SUPPORTED_LANGS:
+                    lang = "ru"
 
                 if not notify or not sign or not send_time:
                     continue
                 if send_time == now:
-                    text = format_horoscope_message(sign)
+                    text = generate(sign, lang)
                     await dp.bot.send_message(
                         int(chat_id),
                         text,
-                        reply_markup=build_main_keyboard(sign),
+                        reply_markup=build_main_keyboard(sign, lang),
                     )
         except Exception as e:
             logger.exception("Ошибка при отправке ежедневного гороскопа: %s", e)
@@ -556,4 +477,5 @@ async def on_startup(dp: Dispatcher):
 
 
 if __name__ == "__main__":
+    from aiogram.utils import executor
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
