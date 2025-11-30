@@ -18,22 +18,11 @@ TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"  # сюда класть карти
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Явное соответствие имён карт -> файлов
-TAROT_IMAGE_MAP: Dict[str, Path] = {
-    "Шут": TAROT_IMAGES_DIR / "Шут.png",
-    "Маг": TAROT_IMAGES_DIR / "маг.png",
-    "Верховная жрица": TAROT_IMAGES_DIR / "Верховная жрица.png",
-    "Императрица": TAROT_IMAGES_DIR / "Императрица.png",
-    "Иерофант": TAROT_IMAGES_DIR / "Иерофант.png",
-    "Влюблённые": TAROT_IMAGES_DIR / "Влюбленные.png",
-    "Колесница": TAROT_IMAGES_DIR / "Колесница.png",
-    "Сила": TAROT_IMAGES_DIR / "Сила.png",
-    "Звезда": TAROT_IMAGES_DIR / "Звезда.png",
-    "Солнце": TAROT_IMAGES_DIR / "Солнце.png",
-    "Мир": TAROT_IMAGES_DIR / "Мир.png",
-    "Отшельник": TAROT_IMAGES_DIR / "Отшельник.png",
-    # если появятся другие карты, можно дописать сюда
-}
+# ---------- НАСТРОЙКИ АДМИНА ДЛЯ /stats ----------
+
+# Если ADMIN_ID = 0, команду /stats может вызывать любой
+# Если ADMIN_ID != 0 — только этот chat_id
+ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 
 # Эмодзи для знаков
 SIGN_EMOJIS = {
@@ -92,8 +81,7 @@ def _get_season_emoji(now: datetime) -> str:
 
 def format_horoscope_message(sign: str) -> str:
     """
-    Переформатируем текст гороскопа из generator.generate()
-    в красивый блок с эмодзи.
+    Форматируем текст гороскопа в раскладку.
     """
     raw = raw_generate(sign)
     emoji = SIGN_EMOJIS.get(sign, "⭐️")
@@ -157,7 +145,7 @@ def format_horoscope_message(sign: str) -> str:
         day_type_src = next((l for l in lines_in if "Тип дня" in l), "")
         season_src = next((l for l in lines_in if "Сезонный настрой" in l), "")
         love_src = next((l for l in lines_in if "Любовь" in l), "")
-        work_src = next((l for l in lines_in if "Работа" in l), "")
+        work_src = next((l for l in lines_in if "Работа" in л), "") if (л := "Работа") else next((l for l in lines_in if "Работа" in l), "")
         money_src = next((l for l in lines_in if "Деньги" in l), "")
         health_src = next((l for l in lines_in if "Здоровье" in l), "")
         advice_src = next((l for l in lines_in if "Совет" in l), "")
@@ -203,39 +191,35 @@ def format_horoscope_message(sign: str) -> str:
 def get_tarot_image_path(card_name: str) -> Optional[Path]:
     """
     Ищем файл картинки для карты Таро по имени.
-    1) сначала смотрим в TAROT_IMAGE_MAP
-    2) потом пытаемся подобрать файл "<имя>.png/.jpg/.jpeg/.webp"
-    3) потом мягкий поиск по stem без регистра
+    Ожидаем файлы в папке tarot_images:
+    - tarot_images/Шут.png
+    - tarot_images/Колесница.jpg
+    и т.п.
+
+    Сначала пробуем точное совпадение, потом более мягкий вариант (без регистра).
     """
     if not card_name:
         return None
 
     if not TAROT_IMAGES_DIR.exists():
-        logger.warning("Папка с картинками Таро не найдена: %s", TAROT_IMAGES_DIR)
         return None
 
-    # 1. явное соответствие
-    mapped = TAROT_IMAGE_MAP.get(card_name)
-    if mapped and mapped.exists():
-        return mapped
-
-    # 2. прямое совпадение "Имя.png" и т.п.
-    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+    # точное совпадение по имени
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
         candidate = TAROT_IMAGES_DIR / f"{card_name}{ext}"
         if candidate.exists():
             return candidate
 
-    # 3. мягкий поиск по имени файла
+    # мягкий поиск: без регистра и лишних пробелов
     norm = card_name.strip().lower()
     for path in TAROT_IMAGES_DIR.iterdir():
         if not path.is_file():
             continue
-        if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
             continue
         if path.stem.strip().lower() == norm:
             return path
 
-    logger.warning("Картинка для карты '%s' не найдена", card_name)
     return None
 
 
@@ -332,9 +316,6 @@ API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 if not API_TOKEN:
     raise RuntimeError("Не найден TELEGRAM_BOT_TOKEN в переменных окружения.")
 
-# твой ID для команды /stats (можно захардкодить)
-ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
-
 bot = Bot(API_TOKEN)
 dp = Dispatcher(bot)
 
@@ -352,8 +333,8 @@ async def cmd_start(message: types.Message):
         text = (
             f"Снова привет, {message.from_user.first_name}!\n\n"
             f"Твой текущий знак: {sign}.\n"
-            "Могу показать гороскоп на сегодня, еженедельную карту Таро "
-            "и отправлять ежедневные прогнозы.\n\n"
+            "Могу показать гороскоп на сегодня, еженедельную карту Таро и "
+            "отправлять ежедневные прогнозы.\n\n"
             "Нажми кнопку ниже, чтобы получить гороскоп 👇"
         )
         await message.answer(text, reply_markup=build_main_keyboard(sign))
@@ -364,10 +345,11 @@ async def cmd_start(message: types.Message):
         )
 
 
-# статистика для админа
+# /stats — показывает количество пользователей и разбивку по знакам
 @dp.message_handler(commands=["stats"])
 async def cmd_stats(message: types.Message):
-    if not ADMIN_ID or message.chat.id != ADMIN_ID:
+    # если ADMIN_ID = 0 — можно всем, иначе только указанному id
+    if ADMIN_ID != 0 and message.chat.id != ADMIN_ID:
         return
 
     state = load_users_state()
@@ -434,7 +416,7 @@ async def handle_today_horoscope(message: types.Message):
 # ---------- Еженедельная карта Таро: КАРТИНКА + ОТДЕЛЬНО ТЕКСТ ----------
 
 @dp.message_handler(lambda m: m.text in {"🔮 Еженедельная карта Таро", "🔮 Таро дня"})
-async def handle_weekly_tarot(message: types.Message):
+async def handle_tarot(message: types.Message):
     """
     Еженедельная карта Таро:
     - draw_tarot_for_user() сам следит за интервалом в 7 дней
@@ -442,35 +424,34 @@ async def handle_weekly_tarot(message: types.Message):
     - затем отдельным сообщением ТЕКСТ
     """
     result = draw_tarot_for_user(message.chat.id)
-    text = result.get("text", "")
-    already = result.get("already_drawn", False)
+    text = result["text"]
 
-    # имя карты из результата
-    card_name = result.get("card_name")
-
-    # если вдруг генератор не вернул имя — попробуем вытащить из текста
-    if not card_name and text.startswith("🔮"):
-        first_line = text.splitlines()[0]
-        if ":" in first_line:
-            card_name = first_line.split(":", 1)[1].strip()
-
-    # 1) картинка
-    img_path = get_tarot_image_path(card_name) if card_name else None
-    if img_path and img_path.exists():
-        try:
-            await message.answer_photo(
-                photo=types.InputFile(str(img_path))
-            )
-        except Exception as e:
-            logger.exception("Не удалось отправить картинку Таро: %s", e)
-
-    # 2) текст
-    if already:
+    # дописываем предупреждение, если уже тянул в эту неделю
+    if result.get("already_drawn"):
         text += (
-            "\n\nТы уже вытянул эту карту на этой неделе 🙂\n"
-            "Следующую можно будет получить через 7 дней."
+            "\n\nТы уже вытянул карту на этой неделе 🙂"
+            "\nСледующую можно будет получить через 7 дней."
         )
 
+    # пытаемся понять имя карты
+    card_name = (
+        result.get("card_name")
+        or result.get("card")
+        or result.get("name")
+    )
+
+    # 1) отправляем картинку, если есть
+    if card_name:
+        img_path = get_tarot_image_path(card_name)
+        if img_path and img_path.exists():
+            try:
+                await message.answer_photo(
+                    types.InputFile(str(img_path))
+                )
+            except Exception as e:
+                logger.exception("Не удалось отправить картинку Таро: %s", e)
+
+    # 2) отправляем текст
     sign = get_user(message.chat.id).get("sign") or "Овен"
     await message.answer(
         text,
