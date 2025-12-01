@@ -4,7 +4,7 @@ import logging
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -25,7 +25,7 @@ TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+# ТОЛЬКО ЭТА ПЕРЕМЕННАЯ ДЛЯ ТОКЕНА
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -129,7 +129,6 @@ UI = {
     },
 }
 
-# наборы для хендлера отмены/назад
 CANCEL_BUTTONS = {
     UI["ru"]["btn_cancel_reminders"],
     UI["en"]["btn_cancel_reminders"],
@@ -336,7 +335,7 @@ async def handle_change_language(message: types.Message):
     await message.answer(ui["choose_lang"], reply_markup=build_lang_keyboard())
 
 
-# выбор знака – теперь фильтр строже: только кнопки вида "🐏 Aries", без "—"
+# выбор знака – только кнопки вида "🐏 Aries", без "—"
 @dp.message_handler(
     lambda m: m.text
     and m.text.startswith(tuple(SIGN_EMOJIS.values()))
@@ -417,13 +416,21 @@ async def handle_change_sign(message: types.Message):
 
 @dp.message_handler(
     lambda m: m.text
-    and m.text in {UI["ru"]["btn_tarot"], UI["en"]["btn_tarot"], UI["es"]["btn_tarot"]}
+    and m.text
+    in {UI["ru"]["btn_tarot"], UI["en"]["btn_tarot"], UI["es"]["btn_tarot"]}
 )
 async def handle_tarot(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
     result = draw_tarot_for_user(chat_id, lang)
-    await message.answer(result["text"], reply_markup=build_main_keyboard(get_user(chat_id).get("sign", ZODIAC_SIGNS[0]), lang))
+
+    user = get_user(chat_id)
+    sign = user.get("sign", ZODIAC_SIGNS[0])
+
+    await message.answer(
+        result["text"],
+        reply_markup=build_main_keyboard(sign, lang),
+    )
 
 
 @dp.message_handler(
@@ -447,8 +454,12 @@ async def handle_cancel_reminders(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
     ui = UI[lang]
-    update_user(chat_id, reminder_time=None)
-    await message.answer(ui["reminder_cleared"], reply_markup=build_main_keyboard(get_user(chat_id).get("sign", ZODIAC_SIGNS[0]), lang))
+    user = update_user(chat_id, reminder_time=None)
+    sign = user.get("sign", ZODIAC_SIGNS[0])
+    await message.answer(
+        ui["reminder_cleared"],
+        reply_markup=build_main_keyboard(sign, lang),
+    )
 
 
 @dp.message_handler(lambda m: m.text in BACK_BUTTONS)
@@ -461,11 +472,15 @@ async def handle_back(message: types.Message):
     if not sign:
         await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard(lang))
         return
-    await message.answer(ui["back_to_menu"], reply_markup=build_main_keyboard(sign, lang))
+    await message.answer(
+        ui["back_to_menu"],
+        reply_markup=build_main_keyboard(sign, lang),
+    )
 
 
 @dp.message_handler(
-    lambda m: ":" in m.text
+    lambda m: m.text
+    and ":" in m.text
     and len(m.text) in (4, 5)
     and m.text.replace(":", "").isdigit()
 )
@@ -491,10 +506,12 @@ async def handle_time_input(message: types.Message):
         await message.answer(ui["reminder_time_format"])
         return
 
-    update_user(chat_id, reminder_time=f"{hour:02d}:{minute:02d}")
+    user = update_user(chat_id, reminder_time=f"{hour:02d}:{minute:02d}")
+    sign = user.get("sign", ZODIAC_SIGNS[0])
+
     await message.answer(
         ui["reminder_set"].format(time=f"{hour:02d}:{minute:02d}"),
-        reply_markup=build_main_keyboard(get_user(chat_id).get("sign", ZODIAC_SIGNS[0]), lang),
+        reply_markup=build_main_keyboard(sign, lang),
     )
 
 
@@ -503,7 +520,13 @@ async def fallback_handler(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
     ui = UI[lang]
-    await message.answer(ui["unknown"], reply_markup=build_sign_keyboard(lang))
+    user = get_user(chat_id)
+    sign = user.get("sign")
+    if sign:
+        kb = build_main_keyboard(sign, lang)
+    else:
+        kb = build_sign_keyboard(lang)
+    await message.answer(ui["unknown"], reply_markup=kb)
 
 
 async def send_daily_horoscopes():
