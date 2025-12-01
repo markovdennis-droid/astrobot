@@ -76,7 +76,7 @@ SIGN_NAMES = {
     },
 }
 
-# Эмодзи знаков — для заголовка (как на скрине)
+# Эмодзи знаков — для заголовка
 SIGN_EMOJIS = {
     "Овен": "🐏",
     "Телец": "🐂",
@@ -122,21 +122,29 @@ PHRASES = {
                 "Уютный день, чтобы подвести маленькие итоги.",
                 "Хорошее время замедлиться и согреться чем-то приятным.",
                 "День больше подходит для спокойных дел, чем для рывков.",
+                "Можно позволить себе чуть больше отдыха и простых радостей.",
+                "Подходит, чтобы разгрести мелкие дела, не перегружая себя.",
             ],
             "spring": [
                 "День поддерживает мягкие обновления и новые идеи.",
                 "Подходит, чтобы попробовать что-то небольшое, но свежее.",
                 "Время увидеть, где можно аккуратно сдвинуться с места.",
+                "Энергия дня помогает мягко выйти из зимней паузы.",
+                "Хороший момент посадить «новые семена» в проектах и планах.",
             ],
             "summer": [
                 "Энергичный день, но лучше не перегружать себя делами.",
                 "Хороший момент добавить в расписание больше радости и света.",
                 "День поддерживает живое общение и простые удовольствия.",
+                "Подходит, чтобы выбрать что-то лёгкое вместо лишней нагрузки.",
+                "Можно позволить себе больше спонтанности и тёплых встреч.",
             ],
             "autumn": [
                 "Спокойный день, чтобы навести порядок в делах и мыслях.",
                 "Время мягких обновлений и тихого роста.",
                 "Подходит для того, чтобы дописать, доделать и немного выдохнуть.",
+                "Хороший момент пересмотреть планы и убрать лишнее.",
+                "День помогает завершить старое и аккуратно перейти к новому.",
             ],
         },
         "day_types": [
@@ -145,36 +153,53 @@ PHRASES = {
             "спокойный день с мягкими возможностями",
             "день, когда лучше не спешить",
             "день, когда многое зависит от настроя",
+            "день для наведения порядка и ясности",
+            "день, поддерживающий внутренний баланс",
         ],
         "love": [
             "В отношениях поможет спокойный, честный разговор.",
             "Полезно чуть мягче отнестись к недостаткам — своим и чужим.",
             "Хороший день, чтобы проявить заботу и внимательность.",
             "Небольшой знак внимания сделает чьи-то глаза теплее.",
+            "Подходит, чтобы обсудить важное без давления и претензий.",
+            "Для одиноких это день, когда стоит прислушаться к своим желаниям.",
+            "Лучшее, что можно сделать — быть немного добрее к себе и партнёру.",
         ],
         "work": [
             "На работе лучше двигаться шаг за шагом, без рывков.",
             "Сосредоточься на одном деле — так быстрее увидишь результат.",
             "Полезно уточнить детали и не стесняться задавать вопросы.",
             "Сделай сегодня упор на аккуратность, а не на скорость.",
+            "Хороший момент разобрать хвосты и старые задачи.",
+            "День подходит для планирования и мягкой коррекции курса.",
+            "Важно не перегружать себя обещаниями и сроками.",
         ],
         "money": [
             "Хороший момент пересмотреть подписки и регулярные траты.",
             "Подойдёт день, чтобы чуть сократить импульсивные покупки.",
             "Полезно навести порядок в расходах и планах на ближайший месяц.",
             "Лучше избегать резких финансовых решений и кредитных авантюр.",
+            "Можно найти простой способ сэкономить, не лишая себя радостей.",
+            "Подходит для небольших, продуманных вложений в себя.",
+            "Хороший день, чтобы обозначить финансовые границы и цели.",
         ],
         "health": [
             "Полезно сделать паузу для дыхания и лёгкой разминки.",
             "Подойдёт мягкая активность: прогулка, растяжка, спокойное движение.",
             "Стоит чуть бережнее отнестись к режиму сна и отдыха.",
             "Небольшой перерыв от гаджетов пойдёт на пользу голове и глазам.",
+            "Важно не игнорировать усталость и вовремя останавливаться.",
+            "Тёплый чай, спокойный вечер и лёгкая забота о себе будут особенно кстати.",
+            "Прислушайся к телу — оно подсказывает, где нужен комфорт.",
         ],
         "advice": [
             "Сделай сегодня хотя бы один небольшой шаг к тому, что давно откладываешь.",
             "Не пытайся успеть всё сразу — выбери главное.",
             "Если что-то тревожит, лучше спокойно обсудить, а не держать в себе.",
             "Найди 10–15 минут только для себя — без чувства вины.",
+            "Обрати внимание на мелочи — именно они создают общее ощущение дня.",
+            "Позволь себе быть неидеальным, но живым и честным.",
+            "Выбирай то, что даёт чувство внутреннего спокойствия, а не гонки.",
         ],
         "colors": [
             "янтарный",
@@ -185,6 +210,8 @@ PHRASES = {
             "лавандовый",
             "серебристый",
             "золотистый",
+            "дымчато-серый",
+            "перламутровый",
         ],
     },
     "en": {
@@ -214,21 +241,29 @@ PHRASES = {
                 "A cozy day to sum up small results.",
                 "A good time to slow down and warm yourself with something pleasant.",
                 "A day better suited to calm tasks than sharp moves.",
+                "You can allow yourself a bit more rest and simple comforts.",
+                "Good for clearing small tasks without overloading yourself.",
             ],
             "spring": [
                 "The day supports gentle updates and new ideas.",
                 "Good moment to try something small but fresh.",
                 "Time to see where you can carefully shift from the dead point.",
+                "The energy of the day helps to softly come out of inner winter.",
+                "Nice moment to plant new seeds in projects and plans.",
             ],
             "summer": [
                 "Energetic day, but better not to overload yourself.",
                 "A good moment to add more joy and light into the schedule.",
                 "The day supports lively communication and simple pleasures.",
+                "It’s better to choose something light instead of extra pressure.",
+                "You can allow yourself a bit more spontaneity and warm meetings.",
             ],
             "autumn": [
                 "A calm day to put things and thoughts in order.",
                 "Time of soft updates and quiet growth.",
                 "Good to finish, polish and then exhale a little.",
+                "Nice moment to review plans and remove what’s unnecessary.",
+                "The day helps to complete the old and carefully move to the new.",
             ],
         },
         "day_types": [
@@ -237,36 +272,53 @@ PHRASES = {
             "calm day with gentle opportunities",
             "day when it’s better not to rush",
             "day when a lot depends on your attitude",
+            "day for bringing more order and clarity",
+            "day that supports inner balance",
         ],
         "love": [
             "A calm, honest talk will help in relationships.",
             "It’s useful to be a bit softer toward flaws — yours and others’.",
             "A good day to show care and attention.",
             "A small sign of attention can make someone’s eyes warmer.",
+            "Suitable day to discuss important matters without pressure.",
+            "For singles, it’s a day to listen more carefully to your true desires.",
+            "The best thing you can do is be a bit kinder to yourself and your partner.",
         ],
         "work": [
             "At work, it’s better to move step by step, without jerks.",
             "Focus on one task — you’ll see the result faster.",
             "It’s useful to clarify details and not be shy to ask questions.",
             "Today accuracy is more important than speed.",
+            "Good moment to sort out old tasks and loose ends.",
+            "The day suits planning and gentle course correction.",
+            "It’s important not to overload yourself with extra promises and deadlines.",
         ],
         "money": [
             "Good moment to review subscriptions and regular expenses.",
             "Suitable day to slightly cut impulsive purchases.",
             "It’s useful to tidy up spending and plans for the next month.",
             "Better to avoid sharp financial decisions and risky credits.",
+            "You may find a simple way to save without depriving yourself of joy.",
+            "Good for small, thoughtful investments in yourself.",
+            "Nice day to define your financial boundaries and goals.",
         ],
         "health": [
             "It’s useful to pause for breathing and a light stretch.",
             "Gentle activity is good: walking, stretching, calm movement.",
             "Be a bit more careful with your sleep and rest routine.",
             "A short break from gadgets will help your head and eyes.",
+            "It’s important not to ignore fatigue and to stop in time.",
+            "Warm tea, a calm evening and soft self-care will be especially helpful.",
+            "Listen to your body — it shows where comfort is needed.",
         ],
         "advice": [
             "Make at least one small step toward something you’ve long postponed.",
             "Don’t try to do everything at once — choose the main things.",
             "If something worries you, it’s better to calmly discuss it than keep it inside.",
             "Find 10–15 minutes just for yourself — without guilt.",
+            "Pay attention to small details — they create the overall feeling of the day.",
+            "Allow yourself to be imperfect but honest and alive.",
+            "Choose what gives you inner peace rather than a feeling of race.",
         ],
         "colors": [
             "amber",
@@ -277,6 +329,8 @@ PHRASES = {
             "lavender",
             "silver",
             "golden",
+            "smoky grey",
+            "pearl white",
         ],
     },
     "es": {
@@ -306,21 +360,29 @@ PHRASES = {
                 "Un día acogedor para cerrar pequeños temas.",
                 "Buen momento para ir más despacio y darte algo agradable.",
                 "Un día más adecuado para tareas tranquilas que para grandes impulsos.",
+                "Puedes permitirte un poco más de descanso y pequeños placeres.",
+                "Bueno para resolver asuntos pequeños sin sobrecargarte.",
             ],
             "spring": [
                 "El día favorece renovaciones suaves e ideas nuevas.",
                 "Buen momento para probar algo pequeño pero fresco.",
                 "Es hora de ver dónde puedes moverte con cuidado del punto muerto.",
+                "La energía del día ayuda a salir poco a poco de la pausa interior.",
+                "Buen momento para plantar nuevas semillas en proyectos y planes.",
             ],
             "summer": [
                 "Día con energía, pero mejor no sobrecargarse.",
                 "Buen momento para añadir más alegría y luz a la agenda.",
                 "El día favorece la comunicación viva y los placeres sencillos.",
+                "Es mejor elegir algo ligero en vez de presionarte demasiado.",
+                "Puedes permitirte un poco más de espontaneidad y encuentros cálidos.",
             ],
             "autumn": [
                 "Día tranquilo para poner en orden cosas y pensamientos.",
                 "Tiempo de cambios suaves y crecimiento silencioso.",
                 "Ideal para terminar, ajustar detalles y luego respirar hondo.",
+                "Buen momento para revisar planes y soltar lo que ya no sirve.",
+                "El día ayuda a cerrar lo viejo y pasar con cuidado a lo nuevo.",
             ],
         },
         "day_types": [
@@ -329,36 +391,53 @@ PHRASES = {
             "día tranquilo con oportunidades suaves",
             "día en el que es mejor no correr",
             "día en el que mucho depende de tu actitud",
+            "día para ordenar y ganar claridad",
+            "día que apoya el equilibrio interior",
         ],
         "love": [
             "En las relaciones ayudará una conversación tranquila y sincera.",
             "Es útil ser un poco más suave con los defectos, propios y ajenos.",
             "Buen día para mostrar cuidado y atención.",
             "Un pequeño gesto de atención puede hacer los ojos de alguien más cálidos.",
+            "Día adecuado para hablar de temas importantes sin presión.",
+            "Para quienes están solos, es un día para escuchar mejor lo que realmente desean.",
+            "Lo mejor que puedes hacer es ser un poco más amable contigo y con tu pareja.",
         ],
         "work": [
             "En el trabajo es mejor avanzar paso a paso, sin tirones.",
             "Concéntrate en una tarea: así verás el resultado antes.",
             "Es útil aclarar detalles y no tener miedo de preguntar.",
             "Hoy es más importante la precisión que la velocidad.",
+            "Buen momento para resolver tareas antiguas y pendientes.",
+            "El día es apropiado para planificar y corregir el rumbo con suavidad.",
+            "Es importante no cargarte con promesas y plazos de más.",
         ],
         "money": [
             "Buen momento para revisar suscripciones y gastos regulares.",
             "Día adecuado para reducir un poco las compras impulsivas.",
             "Es útil ordenar los gastos y planes del próximo mes.",
             "Mejor evitar decisiones financieras bruscas y créditos arriesgados.",
+            "Puedes encontrar una forma sencilla de ahorrar sin perder alegría.",
+            "Adecuado para pequeñas inversiones conscientes en ti mismo.",
+            "Buen día para aclarar tus límites y objetivos financieros.",
         ],
         "health": [
             "Es útil hacer una pausa para respirar y estirar un poco.",
             "Viene bien una actividad suave: paseo, estiramientos, movimiento tranquilo.",
             "Conviene cuidar un poco más el sueño y el descanso.",
             "Un pequeño descanso de las pantallas le hará bien a tu cabeza y a tus ojos.",
+            "Es importante no ignorar el cansancio y saber parar a tiempo.",
+            "Un té caliente, una tarde tranquila y autocuidado suave te harán bien.",
+            "Escucha a tu cuerpo: te muestra dónde hace falta más comodidad.",
         ],
         "advice": [
             "Da hoy al menos un pequeño paso hacia algo que llevas posponiendo.",
             "No intentes hacerlo todo a la vez: elige lo principal.",
             "Si algo te preocupa, es mejor hablarlo con calma que guardártelo.",
             "Busca 10–15 minutos solo para ti, sin sentir culpa.",
+            "Fíjate en los pequeños detalles: crean la sensación general del día.",
+            "Permítete no ser perfecto, pero sí sincero y vivo.",
+            "Elige lo que te dé paz interior, no solo sensación de prisa.",
         ],
         "colors": [
             "ámbar",
@@ -369,6 +448,8 @@ PHRASES = {
             "lavanda",
             "plateado",
             "dorado",
+            "gris humo",
+            "blanco perla",
         ],
     },
 }
@@ -525,7 +606,6 @@ TAROT_CARDS = [
 
 CARD_BY_ID = {c["id"]: c for c in TAROT_CARDS}
 
-
 # ---------- Работа с общим состоянием (гороскопы + таро) ----------
 
 def load_astro_state() -> Dict[str, Any]:
@@ -644,7 +724,6 @@ def _build_horoscope_text(sign: str, lang: str, now: datetime, pattern: Dict[str
     title = labels["title"].format(sign=display_sign)
     season_emoji = _season_emoji(season_key)
 
-    # Emojis для блоков, одинаковые во всех языках
     emoji_love = "💕"
     emoji_work = "👩‍💻"
     emoji_money = "💰"
