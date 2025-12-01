@@ -22,15 +22,19 @@ BASE_DIR = Path(__file__).parent
 USERS_FILE = BASE_DIR / "users_state.json"
 TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"
 
+# Папка и файл фона для гороскопов
+BACKGROUND_DIR = BASE_DIR / "horoscope_background"
+BACKGROUND_DIR.mkdir(parents=True, exist_ok=True)
+BACKGROUND_FILE = BACKGROUND_DIR / "background.jpg"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ТОЛЬКО ЭТА ПЕРЕМЕННАЯ ДЛЯ ТОКЕНА
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# --- Токен бота: пробуем TELEGRAM_BOT_TOKEN, потом BOT_TOKEN ---
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise RuntimeError("Не найден BOT_TOKEN в переменных окружения")
-
+    raise RuntimeError("Не найден TELEGRAM_BOT_TOKEN или BOT_TOKEN в переменных окружения")
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
@@ -66,6 +70,8 @@ UI = {
         "reminder_time_format": "Пожалуйста, введи время в формате ЧЧ:ММ, например 09:00.",
         "lang_set": "Язык сохранён: Русский.",
         "btn_change_lang": "🌐 Сменить язык",
+        "horoscope_error": "Произошла ошибка при получении гороскопа. Попробуй ещё раз чуть позже.",
+        "horoscope_already_sent": "Сегодня ты уже получал гороскоп. Я пришлю новый завтра 💫",
     },
     "en": {
         "choose_lang": "Choose your language:",
@@ -96,6 +102,8 @@ UI = {
         "reminder_time_format": "Please enter time in HH:MM format, e.g. 09:00.",
         "lang_set": "Language set to English.",
         "btn_change_lang": "🌐 Change language",
+        "horoscope_error": "An error occurred while generating your horoscope. Please try again later.",
+        "horoscope_already_sent": "You've already received your horoscope for today. I'll send a new one tomorrow 💫",
     },
     "es": {
         "choose_lang": "Elige un idioma:",
@@ -126,6 +134,8 @@ UI = {
         "reminder_time_format": "Introduce la hora en formato HH:MM, por ejemplo 09:00.",
         "lang_set": "Idioma configurado: Español.",
         "btn_change_lang": "🌐 Cambiar idioma",
+        "horoscope_error": "Se ha producido un error al generar tu horóscopo. Inténtalo de nuevo más tarde.",
+        "horoscope_already_sent": "Ya has recibido tu horóscopo de hoy. Mañana te enviaré uno nuevo 💫",
     },
 }
 
@@ -258,11 +268,100 @@ def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return kb
 
 
+async def send_horoscope_with_background(chat_id: int, sign: str, lang: str):
+    """
+    Универсальная отправка гороскопа:
+    - сначала (если есть) отправляем фон,
+    - потом текст гороскопа + клавиатура.
+    """
+    ui = UI[lang]
+
+    try:
+        text = generate(sign, lang)
+    except Exception as e:
+        logger.error(f"Ошибка генерации гороскопа для {chat_id}: {e}")
+        await bot.send_message(chat_id, ui["horoscope_error"])
+        return
+
+    if not text:
+        # На случай, если generate() внезапно вернул пустую строку / None
+        await bot.send_message(chat_id, ui["horoscope_already_sent"])
+        return
+
+    # Пытаемся отправить фон, если файл существует
+    if BACKGROUND_FILE.exists():
+        try:
+            with BACKGROUND_FILE.open("rb") as photo:
+                await bot.send_photo(chat_id, photo=photo)
+        except Exception as e:
+            logger.error(f"Ошибка отправки фона для {chat_id}: {e}")
+
+    # Отправляем сам гороскоп с основной клавиатурой
+    await bot.send_message(
+        chat_id,
+        text,
+        reply_markup=build_main_keyboard(sign, lang),
+    )
+
+
+async def send_tarot_with_optional_image(chat_id: int, lang: str, sign: str):
+    """
+    Обёртка над draw_tarot_for_user:
+    - отправляем картинку, если draw_tarot_for_user вернул путь к ней,
+    - всегда отправляем текст.
+    """
+    ui = UI[lang]
+
+    try:
+        result = draw_tarot_for_user(chat_id, lang)
+    except Exception as e:
+        logger.error(f"Ошибка при draw_tarot_for_user для {chat_id}: {e}")
+        await bot.send_message(chat_id, ui["unknown"], reply_markup=build_main_keyboard(sign, lang))
+        return
+
+    if not isinstance(result, dict):
+        # На всякий случай, если вдруг вернули не dict
+        await bot.send_message(chat_id, str(result), reply_markup=build_main_keyboard(sign, lang))
+        return
+
+    text = result.get("text", "")
+
+    # Пытаемся вытащить путь к картинке (если генератор его даёт)
+    image_path = result.get("image_path") or result.get("image") or None
+    sent = False
+
+    if image_path:
+        try:
+            img_path = Path(image_path)
+            if not img_path.is_absolute():
+                img_path = TAROT_IMAGES_DIR / img_path
+            if img_path.exists():
+                with img_path.open("rb") as photo:
+                    await bot.send_photo(
+                        chat_id,
+                        photo=photo,
+                        caption=text or None,
+                        reply_markup=build_main_keyboard(sign, lang),
+                    )
+                    sent = True
+        except Exception as e:
+            logger.error(f"Ошибка отправки tarot-изображения для {chat_id}: {e}")
+
+    if not sent:
+        # Если не получилось с картинкой — просто отправляем текст
+        await bot.send_message(
+            chat_id,
+            text,
+            reply_markup=build_main_keyboard(sign, lang),
+        )
+
+
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
     user = get_user(message.chat.id)
     lang = user.get("lang")
     if lang not in ("ru", "en", "es"):
+        # Первое сообщение — по-русски, чтобы точно было понятно
         await message.answer("Выберите язык:", reply_markup=build_lang_keyboard())
         return
 
@@ -399,8 +498,7 @@ async def handle_horoscope_request(message: types.Message):
         await message.answer(UI[lang]["need_sign"], reply_markup=build_sign_keyboard(lang))
         return
 
-    text = generate(sign, lang)
-    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
+    await send_horoscope_with_background(chat_id, sign, lang)
 
 
 @dp.message_handler(
@@ -422,15 +520,10 @@ async def handle_change_sign(message: types.Message):
 async def handle_tarot(message: types.Message):
     chat_id = message.chat.id
     lang = get_user_lang(chat_id)
-    result = draw_tarot_for_user(chat_id, lang)
-
     user = get_user(chat_id)
     sign = user.get("sign", ZODIAC_SIGNS[0])
 
-    await message.answer(
-        result["text"],
-        reply_markup=build_main_keyboard(sign, lang),
-    )
+    await send_tarot_with_optional_image(chat_id, lang, sign)
 
 
 @dp.message_handler(
@@ -541,10 +634,9 @@ async def send_daily_horoscopes():
             lang = data.get("lang", "ru")
             if reminder_time == current_time and sign:
                 try:
-                    text = generate(sign, lang)
-                    await bot.send_message(int(chat_id_str), text)
+                    await send_horoscope_with_background(int(chat_id_str), sign, lang)
                 except Exception as e:
-                    logger.error(f"Ошибка отправки сообщения {chat_id_str}: {e}")
+                    logger.error(f"Ошибка отправки ежедневного гороскопа {chat_id_str}: {e}")
 
         await asyncio.sleep(60)
 
