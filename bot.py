@@ -293,71 +293,105 @@ def render_horoscope_card(text: str) -> Path:
     """
     Рисуем весь текст гороскопа на фоне BACKGROUND_FILE
     и сохраняем как HOROSCOPE_CARD_FILE.
-    Стиль — как в текстовом боте: один шрифт, мягкий коричневый цвет.
+    Стиль — один шрифт, мягкий коричневый цвет.
+    Убираем цветные эмодзи, чтобы не было квадратиков,
+    и подбираем размер шрифта так, чтобы весь текст поместился.
     """
     if not BACKGROUND_FILE.exists():
         raise FileNotFoundError("Фон не найден, BACKGROUND_FILE отсутствует")
 
+    # Удаляем "тяжёлые" эмодзи (большие кодпоинты), чтобы не было квадратиков
+    def strip_emoji(s: str) -> str:
+        return "".join(ch for ch in s if ord(ch) <= 0xFFFF)
+
+    text = strip_emoji(text)
+
     img = Image.open(BACKGROUND_FILE).convert("RGB")
-    draw = ImageDraw.Draw(img)
-
     width, height = img.size
-
-    # Размер шрифта под размер изображения
-    base_size = max(24, int(height * 0.027))  # примерно под телефон
-    font = _load_font(base_size)
 
     # Цвет текста - мягкий коричневый, не черный
     text_color = (90, 70, 50)
 
-    # Отступы
     margin_x = int(width * 0.08)
     margin_y = int(height * 0.08)
     max_width = width - 2 * margin_x
+    max_height = height - 2 * margin_y
 
-    # Перенос строк
-    def wrap_paragraph(paragraph: str) -> list[str]:
-        if not paragraph.strip():
-            return [""]
-        words = paragraph.split(" ")
-        lines: list[str] = []
-        current = ""
-        for w in words:
-            candidate = (current + " " + w).strip()
-            bbox = draw.textbbox((0, 0), candidate, font=font)
-            line_width = bbox[2] - bbox[0]
-            if line_width <= max_width:
-                current = candidate
+    def layout_with_font(font: ImageFont.FreeTypeFont):
+        draw = ImageDraw.Draw(img)
+        paragraphs = text.split("\n")
+
+        def wrap_paragraph(paragraph: str) -> list[str]:
+            if not paragraph.strip():
+                return [""]
+            words = paragraph.split(" ")
+            lines: list[str] = []
+            current = ""
+            for w in words:
+                candidate = (current + " " + w).strip()
+                bbox = draw.textbbox((0, 0), candidate, font=font)
+                line_width = bbox[2] - bbox[0]
+                if line_width <= max_width:
+                    current = candidate
+                else:
+                    if current:
+                        lines.append(current)
+                    current = w
+            if current:
+                lines.append(current)
+            return lines
+
+        all_lines: list[str] = []
+        for p in paragraphs:
+            all_lines.extend(wrap_paragraph(p))
+            all_lines.append("")  # пустая строка как интервал абзаца
+
+        bbox = draw.textbbox((0, 0), "Ay", font=font)
+        line_height = (bbox[3] - bbox[1]) + int(height * 0.008)
+
+        total_height = 0
+        for line in all_lines:
+            if not line:
+                total_height += line_height // 2
             else:
-                if current:
-                    lines.append(current)
-                current = w
-        if current:
-            lines.append(current)
-        return lines
+                total_height += line_height
 
-    paragraphs = text.split("\n")
-    all_lines: list[str] = []
-    for p in paragraphs:
-        all_lines.extend(wrap_paragraph(p))
-        all_lines.append("")  # пустая строка как интервал абзаца
+        return all_lines, line_height, total_height
 
-    # Высота строки
-    bbox = draw.textbbox((0, 0), "Ay", font=font)
-    line_height = (bbox[3] - bbox[1]) + int(height * 0.008)
+    # Пытаемся подобрать размер шрифта так, чтобы весь текст влез
+    base_size = max(22, int(height * 0.026))
+    best_font = None
+    best_lines = None
+    best_line_height = None
+
+    for _ in range(6):  # до 6 итераций уменьшения
+        font = _load_font(base_size)
+        lines, line_height, total_height = layout_with_font(font)
+        if total_height <= max_height or base_size <= 16:
+            best_font = font
+            best_lines = lines
+            best_line_height = line_height
+            break
+        base_size = int(base_size * 0.9)  # уменьшаем шрифт и пробуем снова
+
+    if best_font is None:
+        best_font = _load_font(18)
+        best_lines, best_line_height, _ = layout_with_font(best_font)
+
+    img = Image.open(BACKGROUND_FILE).convert("RGB")
+    draw = ImageDraw.Draw(img)
 
     y = margin_y
-    for line in all_lines:
-        if y > height - margin_y:
-            break  # на всякий случай, чтобы текст не вылез совсем вниз
+    for line in best_lines:
         if not line:
-            y += line_height // 2
+            y += best_line_height // 2
             continue
-        draw.text((margin_x, y), line, fill=text_color, font=font)
-        y += line_height
+        draw.text((margin_x, y), line, fill=text_color, font=best_font)
+        y += best_line_height
 
     img.save(HOROSCOPE_CARD_FILE, quality=95)
     return HOROSCOPE_CARD_FILE
+
 
 # -------------------------------------------------------------------
 #   ХЭНДЛЕРЫ
