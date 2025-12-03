@@ -291,6 +291,54 @@ async def cmd_language(message: types.Message):
     await message.answer(ui["choose_lang"], reply_markup=build_lang_keyboard())
 
 
+@dp.message_handler(commands=["stats"])
+async def cmd_stats(message: types.Message):
+    """Показать простую статистику по пользователям."""
+    lang = get_user_lang(message.chat.id)
+    ui = UI[lang]
+
+    users = load_users()
+    total_users = len(users)
+
+    with_notify = sum(
+        1
+        for u in users.values()
+        if u.get("reminder_time")
+    )
+
+    # Подсчёт по знакам
+    sign_counts: Dict[str, int] = {s: 0 for s in ZODIAC_SIGNS}
+    for u in users.values():
+        s = u.get("sign")
+        if s in sign_counts:
+            sign_counts[s] += 1
+
+    lines = []
+    lines.append(ui["stats_header_users"].format(total=total_users))
+    lines.append(ui["stats_header_notify"].format(with_notify=with_notify))
+    lines.append("")  # пустая строка
+    lines.append(ui["stats_by_sign"])
+
+    for s in ZODIAC_SIGNS:
+        count = sign_counts[s]
+        if count == 0:
+            continue
+        emoji = SIGN_EMOJIS.get(s, "⭐️")
+        local_name = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(s, s)
+        lines.append(f"{emoji} {local_name}: {count}")
+
+    if total_users == 0:
+        # если вообще нет пользователей
+        if lang == "ru":
+            lines = ["Пока нет данных по пользователям."]
+        elif lang == "en":
+            lines = ["No user data yet."]
+        else:
+            lines = ["Todavía no hay datos de usuarios."]
+
+    await message.answer("\n".join(lines))
+
+
 @dp.message_handler(
     lambda m: m.text
     in {
