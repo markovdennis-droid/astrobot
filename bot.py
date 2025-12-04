@@ -32,6 +32,12 @@ if not BOT_TOKEN:
         "Не найден TELEGRAM_BOT_TOKEN или BOT_TOKEN в переменных окружения"
     )
 
+# IDs админов, которые могут вызывать /stats
+ADMIN_IDS = {
+    8023489016,  # 🔁 ЗАМЕНИ на свой Telegram user_id
+    # можно добавить ещё id через запятую
+}
+
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
@@ -293,7 +299,12 @@ async def cmd_language(message: types.Message):
 
 @dp.message_handler(commands=["stats"])
 async def cmd_stats(message: types.Message):
-    """Показать простую статистику по пользователям."""
+    """Показать простую статистику по пользователям. Доступно только админам."""
+    if message.from_user.id not in ADMIN_IDS:
+        # Можно раскомментить, если хочешь видеть сообщение "нет доступа":
+        # await message.answer("Эта команда доступна только администратору бота.")
+        return
+
     lang = get_user_lang(message.chat.id)
     ui = UI[lang]
 
@@ -316,7 +327,7 @@ async def cmd_stats(message: types.Message):
     lines = []
     lines.append(ui["stats_header_users"].format(total=total_users))
     lines.append(ui["stats_header_notify"].format(with_notify=with_notify))
-    lines.append("")  # пустая строка
+    lines.append("")
     lines.append(ui["stats_by_sign"])
 
     for s in ZODIAC_SIGNS:
@@ -328,7 +339,6 @@ async def cmd_stats(message: types.Message):
         lines.append(f"{emoji} {local_name}: {count}")
 
     if total_users == 0:
-        # если вообще нет пользователей
         if lang == "ru":
             lines = ["Пока нет данных по пользователям."]
         elif lang == "en":
