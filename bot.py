@@ -252,12 +252,9 @@ def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
 def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
     ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    if lang == "ru":
-        times = ["07:00", "08:00", "09:00", "10:00", "19:00", "20:00", "21:00"]
-    elif lang == "en":
-        times = ["07:00", "08:00", "09:00", "10:00", "7:00", "8:00", "9:00"]
-    else:
-        times = ["07:00", "08:00", "09:00", "10:00", "19:00", "20:00", "21:00"]
+
+    # единый набор времени для всех языков, без дублей
+    times = ["07:00", "08:00", "09:00", "10:00", "19:00", "20:00", "21:00"]
 
     for t in times:
         kb.row(KeyboardButton(t))
@@ -301,7 +298,7 @@ async def cmd_language(message: types.Message):
 async def cmd_stats(message: types.Message):
     """Показать простую статистику по пользователям. Доступно только админам."""
     if message.from_user.id not in ADMIN_IDS:
-        # Можно раскомментить, если хочешь видеть сообщение "нет доступа":
+        # Можно раскомментить, если хочешь явное сообщение:
         # await message.answer("Эта команда доступна только администратору бота.")
         return
 
