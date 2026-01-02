@@ -394,7 +394,6 @@ async def on_startup(dp: Dispatcher):
 # -----------------------
 
 if __name__ == "__main__":
-    global POLLING_STARTED
 
     if POLLING_STARTED:
         logger.error("Polling already running. Exit.")
