@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
+import aiohttp  # === SAFE API ADDITION ===
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
@@ -17,6 +19,10 @@ from generator import (
     SIGN_NAMES,
     TZ,
 )
+
+# === SAFE API CONFIG ===
+API_BASE_URL = "https://astrobot-api-jrrr.onrender.com"
+# =======================
 
 BASE_DIR = Path(__file__).parent
 USERS_FILE = BASE_DIR / "users_state.json"
@@ -32,10 +38,8 @@ if not BOT_TOKEN:
         "Не найден TELEGRAM_BOT_TOKEN или BOT_TOKEN в переменных окружения"
     )
 
-# IDs админов, которые могут вызывать /stats
 ADMIN_IDS = {
-    8023489016,  # 🔁 ЗАМЕНИ на свой Telegram user_id
-    # можно добавить ещё id через запятую
+    8023489016,
 }
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
@@ -133,35 +137,7 @@ UI = {
         "btn_change_lang": "🌐 Cambiar idioma",
     },
 }
-
-CANCEL_BUTTONS = {
-    UI["ru"]["btn_cancel_reminders"],
-    UI["en"]["btn_cancel_reminders"],
-    UI["es"]["btn_cancel_reminders"],
-}
-BACK_BUTTONS = {
-    UI["ru"]["btn_back"],
-    UI["en"]["btn_back"],
-    UI["es"]["btn_back"],
-}
-
-SIGN_EMOJIS = {
-    "Овен": "🐏",
-    "Телец": "🐂",
-    "Близнецы": "👥",
-    "Рак": "🦀",
-    "Лев": "🦁",
-    "Дева": "👩‍🦰",
-    "Весы": "⚖️",
-    "Скорпион": "🦂",
-    "Стрелец": "🏹",
-    "Козерог": "🐐",
-    "Водолей": "🌊",
-    "Рыбы": "🐟",
-}
-
 # ----------------------- Работа с пользователями --------------------
-
 
 def load_users() -> Dict[str, Any]:
     if not USERS_FILE.exists():
@@ -204,7 +180,20 @@ def get_user_lang(chat_id: int) -> str:
         lang = "ru"
     return lang
 
+
 # ----------------------------- Клавиатуры ---------------------------
+
+CANCEL_BUTTONS = {
+    UI["ru"]["btn_cancel_reminders"],
+    UI["en"]["btn_cancel_reminders"],
+    UI["es"]["btn_cancel_reminders"],
+}
+
+BACK_BUTTONS = {
+    UI["ru"]["btn_back"],
+    UI["en"]["btn_back"],
+    UI["es"]["btn_back"],
+}
 
 
 def build_lang_keyboard() -> ReplyKeyboardMarkup:
@@ -221,8 +210,7 @@ def build_sign_keyboard(lang: str) -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     for i, sign in enumerate(ZODIAC_SIGNS):
         local = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(sign, sign)
-        emoji = SIGN_EMOJIS.get(sign, "⭐️")
-        btn_text = f"{emoji} {local}"
+        btn_text = local
         if i % 2 == 0:
             kb.row(KeyboardButton(btn_text))
         else:
@@ -233,15 +221,6 @@ def build_sign_keyboard(lang: str) -> ReplyKeyboardMarkup:
 def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
     ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    emoji = SIGN_EMOJIS.get(sign, "⭐️")
-    local_name = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(sign, sign)
-    if lang == "ru":
-        title = f"{emoji} {local_name} — гороскоп на сегодня"
-    elif lang == "en":
-        title = f"{emoji} {local_name} — horoscope for today"
-    else:
-        title = f"{emoji} {local_name} — horóscopo para hoy"
-    kb.row(KeyboardButton(title))
     kb.row(KeyboardButton(ui["btn_tarot"]))
     kb.row(KeyboardButton(ui["btn_reminder"]))
     kb.row(KeyboardButton(ui["btn_change_sign"]))
@@ -250,20 +229,29 @@ def build_main_keyboard(sign: str, lang: str) -> ReplyKeyboardMarkup:
 
 
 def build_time_keyboard(lang: str) -> ReplyKeyboardMarkup:
-    ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-
-    # единый набор времени для всех языков, без дублей
     times = ["07:00", "08:00", "09:00", "10:00", "19:00", "20:00", "21:00"]
-
     for t in times:
         kb.row(KeyboardButton(t))
     kb.row(KeyboardButton(UI[lang]["btn_cancel_reminders"]))
     kb.row(KeyboardButton(UI[lang]["btn_back"]))
     return kb
 
-# ----------------------------- Хэндлеры -----------------------------
 
+# ----------------------------- API CHECK ----------------------------
+
+@dp.message_handler(commands=["api"])
+async def handle_api_health(message: types.Message):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{API_BASE_URL}/health", timeout=5) as resp:
+                data = await resp.json()
+                await message.answer(f"✅ API health: {data}")
+    except Exception as e:
+        await message.answer(f"❌ API error: {e}")
+
+
+# ----------------------------- Хэндлеры -----------------------------
 
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
@@ -276,10 +264,9 @@ async def cmd_start(message: types.Message):
     ui = UI[lang]
     sign = user.get("sign")
     if sign:
-        local_name = SIGN_NAMES[lang].get(sign, sign)
         await message.answer(
             ui["start_with_sign"].format(
-                name=message.from_user.first_name, sign=local_name
+                name=message.from_user.first_name, sign=sign
             ),
             reply_markup=build_main_keyboard(sign, lang),
         )
@@ -287,67 +274,9 @@ async def cmd_start(message: types.Message):
         await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
 
 
-@dp.message_handler(commands=["lang", "language"])
-async def cmd_language(message: types.Message):
-    lang = get_user_lang(message.chat.id)
-    ui = UI[lang]
-    await message.answer(ui["choose_lang"], reply_markup=build_lang_keyboard())
-
-
-@dp.message_handler(commands=["stats"])
-async def cmd_stats(message: types.Message):
-    """Показать простую статистику по пользователям. Доступно только админам."""
-    if message.from_user.id not in ADMIN_IDS:
-        # Можно раскомментить, если хочешь явное сообщение:
-        # await message.answer("Эта команда доступна только администратору бота.")
-        return
-
-    lang = get_user_lang(message.chat.id)
-    ui = UI[lang]
-
-    users = load_users()
-    total_users = len(users)
-
-    with_notify = sum(
-        1
-        for u in users.values()
-        if u.get("reminder_time")
-    )
-
-    # Подсчёт по знакам
-    sign_counts: Dict[str, int] = {s: 0 for s in ZODIAC_SIGNS}
-    for u in users.values():
-        s = u.get("sign")
-        if s in sign_counts:
-            sign_counts[s] += 1
-
-    lines = []
-    lines.append(ui["stats_header_users"].format(total=total_users))
-    lines.append(ui["stats_header_notify"].format(with_notify=with_notify))
-    lines.append("")
-    lines.append(ui["stats_by_sign"])
-
-    for s in ZODIAC_SIGNS:
-        count = sign_counts[s]
-        if count == 0:
-            continue
-        emoji = SIGN_EMOJIS.get(s, "⭐️")
-        local_name = SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(s, s)
-        lines.append(f"{emoji} {local_name}: {count}")
-
-    if total_users == 0:
-        if lang == "ru":
-            lines = ["Пока нет данных по пользователям."]
-        elif lang == "en":
-            lines = ["No user data yet."]
-        else:
-            lines = ["Todavía no hay datos de usuarios."]
-
-    await message.answer("\n".join(lines))
-
-
 @dp.message_handler(
     lambda m: m.text
+    and m.text
     in {
         UI["ru"]["btn_lang_ru"],
         UI["ru"]["btn_lang_en"],
@@ -365,14 +294,13 @@ async def handle_lang_choice(message: types.Message):
 
     user = update_user(message.chat.id, lang=lang)
     ui = UI[lang]
-
     sign = user.get("sign")
+
     await message.answer(ui["lang_set"])
     if sign:
-        local_name = SIGN_NAMES[lang].get(sign, sign)
         await message.answer(
             ui["start_with_sign"].format(
-                name=message.from_user.first_name, sign=local_name
+                name=message.from_user.first_name, sign=sign
             ),
             reply_markup=build_main_keyboard(sign, lang),
         )
@@ -380,249 +308,7 @@ async def handle_lang_choice(message: types.Message):
         await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
 
 
-@dp.message_handler(
-    lambda m: m.text
-    and (
-        m.text == UI["ru"]["btn_change_lang"]
-        or m.text == UI["en"]["btn_change_lang"]
-        or m.text == UI["es"]["btn_change_lang"]
-    )
-)
-async def handle_change_language(message: types.Message):
-    lang = get_user_lang(message.chat.id)
-    ui = UI[lang]
-    await message.answer(ui["choose_lang"], reply_markup=build_lang_keyboard())
-
-
-# выбор знака – только кнопки вида "🐏 Aries", без "—"
-@dp.message_handler(
-    lambda m: m.text
-    and m.text.startswith(tuple(SIGN_EMOJIS.values()))
-    and "—" not in m.text
-)
-async def handle_sign_choice(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-
-    parts = message.text.split(" ", 1)
-    if len(parts) < 2:
-        return
-    label = parts[1].strip()
-
-    base_sign = None
-    for s in ZODIAC_SIGNS:
-        if SIGN_NAMES.get(lang, SIGN_NAMES["ru"]).get(s, s) == label:
-            base_sign = s
-            break
-
-    if not base_sign:
-        return
-
-    update_user(chat_id, sign=base_sign)
-    await message.answer(
-        UI[lang]["start_with_sign"].format(
-            name=message.from_user.first_name, sign=label
-        ),
-        reply_markup=build_main_keyboard(base_sign, lang),
-    )
-
-
-@dp.message_handler(
-    lambda m: m.text
-    and any(
-        m.text.startswith(prefix)
-        for prefix in [
-            "🐏",
-            "🐂",
-            "👥",
-            "🦀",
-            "🦁",
-            "👩‍🦰",
-            "⚖️",
-            "🦂",
-            "🏹",
-            "🐐",
-            "🌊",
-            "🐟",
-        ]
-    )
-    and "—" in m.text
-)
-async def handle_horoscope_request(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    user = get_user(chat_id)
-    sign = user.get("sign")
-
-    if not sign:
-        await message.answer(
-            UI[lang]["need_sign"], reply_markup=build_sign_keyboard(lang)
-        )
-        return
-
-    try:
-        text = generate(sign, lang)
-    except Exception as e:
-        logger.error(f"Ошибка generate() для {chat_id}: {e}")
-        text = UI[lang]["unknown"]
-
-    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
-
-
-@dp.message_handler(
-    lambda m: m.text
-    and m.text
-    in {UI["ru"]["btn_change_sign"], UI["en"]["btn_change_sign"], UI["es"]["btn_change_sign"]}
-)
-async def handle_change_sign(message: types.Message):
-    lang = get_user_lang(message.chat.id)
-    ui = UI[lang]
-    await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
-
-
-@dp.message_handler(
-    lambda m: m.text
-    and m.text
-    in {UI["ru"]["btn_tarot"], UI["en"]["btn_tarot"], UI["es"]["btn_tarot"]}
-)
-async def handle_tarot(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    result = draw_tarot_for_user(chat_id, lang)
-
-    user = get_user(chat_id)
-    sign = user.get("sign", ZODIAC_SIGNS[0])
-
-    image_path = None
-    text = ""
-
-    if isinstance(result, dict):
-        text = result.get("text", "")
-        image_name = (
-            result.get("image_path")
-            or result.get("image")
-            or result.get("image_file")
-            or result.get("filename")
-        )
-        if image_name:
-            candidate = TAROT_IMAGES_DIR / image_name
-            if candidate.exists():
-                image_path = candidate
-    else:
-        text = str(result)
-
-    if image_path is not None:
-        try:
-            await bot.send_photo(
-                chat_id,
-                photo=types.InputFile(image_path),
-                caption=text or None,
-                reply_markup=build_main_keyboard(sign, lang),
-            )
-            return
-        except Exception as e:
-            logger.error(f"Ошибка отправки изображения Таро для {chat_id}: {e}")
-
-    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
-
-
-@dp.message_handler(
-    lambda m: m.text
-    and m.text
-    in {
-        UI["ru"]["btn_reminder"],
-        UI["en"]["btn_reminder"],
-        UI["es"]["btn_reminder"],
-    }
-)
-async def handle_reminder_button(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    ui = UI[lang]
-    await message.answer(ui["reminder_prompt"], reply_markup=build_time_keyboard(lang))
-
-
-@dp.message_handler(lambda m: m.text in CANCEL_BUTTONS)
-async def handle_cancel_reminders(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    ui = UI[lang]
-    user = update_user(chat_id, reminder_time=None)
-    sign = user.get("sign", ZODIAC_SIGNS[0])
-    await message.answer(
-        ui["reminder_cleared"],
-        reply_markup=build_main_keyboard(sign, lang),
-    )
-
-
-@dp.message_handler(lambda m: m.text in BACK_BUTTONS)
-async def handle_back(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    ui = UI[lang]
-    user = get_user(chat_id)
-    sign = user.get("sign")
-    if not sign:
-        await message.answer(ui["need_sign"], reply_markup=build_sign_keyboard(lang))
-        return
-    await message.answer(
-        ui["back_to_menu"],
-        reply_markup=build_main_keyboard(sign, lang),
-    )
-
-
-@dp.message_handler(
-    lambda m: m.text
-    and ":" in m.text
-    and len(m.text) in (4, 5)
-    and m.text.replace(":", "").isdigit()
-)
-async def handle_time_input(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    ui = UI[lang]
-    time_text = message.text.strip()
-
-    parts = time_text.split(":")
-    if len(parts) != 2:
-        await message.answer(ui["reminder_time_format"])
-        return
-
-    hour_str, minute_str = parts
-    if not hour_str.isdigit() or not minute_str.isdigit():
-        await message.answer(ui["reminder_time_format"])
-        return
-
-    hour = int(hour_str)
-    minute = int(minute_str)
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        await message.answer(ui["reminder_time_format"])
-        return
-
-    user = update_user(chat_id, reminder_time=f"{hour:02d}:{minute:02d}")
-    sign = user.get("sign", ZODIAC_SIGNS[0])
-
-    await message.answer(
-        ui["reminder_set"].format(time=f"{hour:02d}:{minute:02d}"),
-        reply_markup=build_main_keyboard(sign, lang),
-    )
-
-
-@dp.message_handler()
-async def fallback_handler(message: types.Message):
-    chat_id = message.chat.id
-    lang = get_user_lang(chat_id)
-    ui = UI[lang]
-    user = get_user(chat_id)
-    sign = user.get("sign")
-    if sign:
-        kb = build_main_keyboard(sign, lang)
-    else:
-        kb = build_sign_keyboard(lang)
-    await message.answer(ui["unknown"], reply_markup=kb)
-
 # --------------------- Ежедневные напоминания ----------------------
-
 
 async def send_daily_horoscopes():
     while True:
@@ -631,12 +317,9 @@ async def send_daily_horoscopes():
         users = load_users()
 
         for chat_id_str, data in users.items():
-            reminder_time = data.get("reminder_time")
-            sign = data.get("sign")
-            lang = data.get("lang", "ru")
-            if reminder_time == current_time and sign:
+            if data.get("reminder_time") == current_time and data.get("sign"):
                 try:
-                    text = generate(sign, lang)
+                    text = generate(data["sign"], data.get("lang", "ru"))
                     await bot.send_message(int(chat_id_str), text)
                 except Exception as e:
                     logger.error(f"Ошибка отправки сообщения {chat_id_str}: {e}")
