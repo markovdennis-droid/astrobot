@@ -217,34 +217,35 @@ def build_main_keyboard(lang: str):
 # COMMANDS
 # -----------------------
 
-@dp.message_handler(commands=["start"])
-async def cmd_start(message: types.Message):
-    user = get_user(message.chat.id)
-    lang = user.get("lang")
+@dp.message_handler(lambda m: any(
+    m.text == value
+    for names in SIGN_NAMES.values()
+    for value in names.values()
+))
+async def choose_sign(message: types.Message):
+    selected_sign = None
 
-    if lang not in UI:
-        await message.answer(
-            UI["ru"]["choose_lang"],
-            reply_markup=build_lang_keyboard(),
-        )
+    # ищем знак независимо от языка
+    for names in SIGN_NAMES.values():
+        for sign_key, sign_label in names.items():
+            if message.text == sign_label:
+                selected_sign = sign_key
+                break
+        if selected_sign:
+            break
+
+    if not selected_sign:
         return
 
-    ui = UI[lang]
-    sign = user.get("sign")
+    lang = get_lang(message.chat.id)
 
-    if sign:
-        await message.answer(
-            ui["start_with_sign"].format(
-                name=message.from_user.first_name,
-                sign=sign,
-            ),
-            reply_markup=build_main_keyboard(lang),
-        )
-    else:
-        await message.answer(
-            ui["start_no_sign"],
-            reply_markup=build_sign_keyboard(lang),
-        )
+    update_user(message.chat.id, sign=selected_sign)
+
+    await message.answer(
+        generate(selected_sign, lang),
+        reply_markup=build_main_keyboard(lang),
+    )
+
 
 
 # -----------------------
