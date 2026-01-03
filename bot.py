@@ -4,22 +4,6 @@
 
 import asyncio
 
-# 1. Явно создаём event loop
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-# 2. Запрещаем uvloop (который тащит uvicorn[standard])
-try:
-    import uvloop
-    uvloop.install = lambda: None
-except Exception:
-    pass
-
-# ============================================
-# STANDARD IMPORTS
-# ============================================
-
-
 import os
 import json
 import logging
@@ -628,9 +612,13 @@ async def on_shutdown(dp: Dispatcher):
 # =======================
 
 if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     executor.start_polling(
         dp,
         skip_updates=True,
         on_startup=on_startup,
-        on_shutdown=on_shutdown,
+        loop=loop
     )
+
