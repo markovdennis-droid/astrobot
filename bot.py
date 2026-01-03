@@ -1,17 +1,24 @@
-# =======================
-# EVENT LOOP FIX (Render + uvicorn + aiogram 2.x)
-# =======================
+# ============================================
+# EVENT LOOP FIX (Python 3.11 + aiogram 2.x)
+# ============================================
 
 import asyncio
 
-# ❗️ВАЖНО:
-# uvicorn[standard] тянет uvloop, который ломает aiogram 2.x на Python 3.11
-# Принудительно возвращаем стандартный event loop
-asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+# 1. Явно создаём event loop
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
 
-# =======================
+# 2. Запрещаем uvloop (который тащит uvicorn[standard])
+try:
+    import uvloop
+    uvloop.install = lambda: None
+except Exception:
+    pass
+
+# ============================================
 # STANDARD IMPORTS
-# =======================
+# ============================================
+
 
 import os
 import json
