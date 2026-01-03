@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 import asyncio
 import sqlite3
@@ -20,25 +19,19 @@ from generator import (
 )
 
 # =======================
-# CONFIG & PATHS
+# CONFIG
 # =======================
 
 BASE_DIR = Path(__file__).parent
 
-# ⬇️ ВАЖНО: SQLite на Render Disk
 DATA_DIR = Path(os.getenv("DATA_DIR", "/var/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "astrobot.db"
-
 TAROT_IMAGES_DIR = BASE_DIR / "tarot_images"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("astrobot")
-
-# =======================
-# TELEGRAM TOKEN
-# =======================
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -47,16 +40,10 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
-# =======================
-# ADMINS
-# =======================
-
-ADMIN_IDS = {
-    8023489016,
-}
+ADMIN_IDS = {8023489016}
 
 # =======================
-# SQLITE INIT
+# DATABASE
 # =======================
 
 def get_db():
@@ -81,9 +68,6 @@ def init_db():
 
 init_db()
 
-# =======================
-# USER STORAGE (SQLite)
-# =======================
 
 def get_user(chat_id: int) -> Dict[str, Any]:
     with get_db() as conn:
@@ -96,7 +80,7 @@ def get_user(chat_id: int) -> Dict[str, Any]:
 
 def update_user(chat_id: int, **kwargs) -> Dict[str, Any]:
     user = get_user(chat_id)
-    fields = {**user, **kwargs}
+    data = {**user, **kwargs}
 
     with get_db() as conn:
         conn.execute("""
@@ -109,14 +93,14 @@ def update_user(chat_id: int, **kwargs) -> Dict[str, Any]:
                 tarot_last_date = excluded.tarot_last_date
         """, (
             chat_id,
-            fields.get("lang", "ru"),
-            fields.get("sign"),
-            fields.get("reminder_time"),
-            fields.get("tarot_last_date"),
+            data.get("lang", "ru"),
+            data.get("sign"),
+            data.get("reminder_time"),
+            data.get("tarot_last_date"),
         ))
         conn.commit()
 
-    return fields
+    return data
 
 
 def get_user_lang(chat_id: int) -> str:
@@ -133,18 +117,17 @@ UI = {
         "btn_lang_en": "🇬🇧 English",
         "btn_lang_es": "🇪🇸 Español",
         "start_no_sign": "✨ Привет! Я астробот.\n\nВыбери свой знак зодиака:",
-        "start_with_sign": "Снова привет, {name}!\n\nТвой текущий знак: {sign}.",
+        "start_with_sign": "Снова привет, {name}!\n\nТвой знак: {sign}",
         "btn_tarot": "🔮 Еженедельная карта Таро",
         "btn_reminder": "⏰ Настроить напоминание",
         "btn_change_sign": "♻️ Сменить знак",
-        "btn_cancel_reminders": "❌ Отменить напоминания",
-        "btn_back": "⬅️ Назад",
-        "reminder_prompt": "Во сколько тебе удобно получать ежедневный гороскоп?",
-        "reminder_set": "Я буду присылать гороскоп каждый день в {time}.",
-        "reminder_cleared": "Напоминания отключены.",
-        "need_sign": "Сначала выбери знак зодиака:",
-        "unknown": "Я тебя не понял 🙂",
         "btn_change_lang": "🌐 Сменить язык",
+        "btn_cancel": "❌ Отменить",
+        "btn_back": "⬅️ Назад",
+        "reminder_prompt": "Во сколько присылать ежедневный гороскоп?",
+        "reminder_set": "Буду присылать каждый день в {time}.",
+        "need_sign": "Сначала выбери знак зодиака.",
+        "unknown": "Я тебя не понял 🙂",
     },
     "en": {
         "choose_lang": "Choose language:",
@@ -156,14 +139,13 @@ UI = {
         "btn_tarot": "🔮 Weekly Tarot card",
         "btn_reminder": "⏰ Set reminder",
         "btn_change_sign": "♻️ Change sign",
-        "btn_cancel_reminders": "❌ Cancel reminders",
+        "btn_change_lang": "🌐 Change language",
+        "btn_cancel": "❌ Cancel",
         "btn_back": "⬅️ Back",
         "reminder_prompt": "What time should I send your horoscope?",
         "reminder_set": "I will send it daily at {time}.",
-        "reminder_cleared": "Reminders disabled.",
-        "need_sign": "Choose your sign first:",
+        "need_sign": "Choose your sign first.",
         "unknown": "I didn’t understand 🙂",
-        "btn_change_lang": "🌐 Change language",
     },
     "es": {
         "choose_lang": "Elige idioma:",
@@ -175,26 +157,14 @@ UI = {
         "btn_tarot": "🔮 Carta de Tarot semanal",
         "btn_reminder": "⏰ Recordatorio",
         "btn_change_sign": "♻️ Cambiar signo",
-        "btn_cancel_reminders": "❌ Cancelar",
+        "btn_change_lang": "🌐 Cambiar idioma",
+        "btn_cancel": "❌ Cancelar",
         "btn_back": "⬅️ Atrás",
         "reminder_prompt": "¿A qué hora enviar el horóscopo?",
         "reminder_set": "Enviaré cada día a las {time}.",
-        "reminder_cleared": "Recordatorios desactivados.",
-        "need_sign": "Elige signo primero:",
+        "need_sign": "Elige signo primero.",
         "unknown": "No entendí 🙂",
-        "btn_change_lang": "🌐 Cambiar idioma",
     },
-}
-CANCEL_BUTTONS = {
-    UI["ru"]["btn_cancel_reminders"],
-    UI["en"]["btn_cancel_reminders"],
-    UI["es"]["btn_cancel_reminders"],
-}
-
-BACK_BUTTONS = {
-    UI["ru"]["btn_back"],
-    UI["en"]["btn_back"],
-    UI["es"]["btn_back"],
 }
 
 SIGN_EMOJIS = {
@@ -212,8 +182,11 @@ SIGN_EMOJIS = {
     "Рыбы": "🐟",
 }
 
+# =======================
+# KEYBOARDS
+# =======================
 
-def build_lang_keyboard():
+def kb_lang():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(
         KeyboardButton(UI["ru"]["btn_lang_ru"]),
@@ -223,7 +196,7 @@ def build_lang_keyboard():
     return kb
 
 
-def build_sign_keyboard(lang: str):
+def kb_signs(lang: str):
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     for s in ZODIAC_SIGNS:
         local = SIGN_NAMES[lang].get(s, s)
@@ -231,11 +204,19 @@ def build_sign_keyboard(lang: str):
     return kb
 
 
-def build_main_keyboard(sign: str, lang: str):
+def kb_main(sign: str, lang: str):
     ui = UI[lang]
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
+
     local = SIGN_NAMES[lang].get(sign, sign)
-    kb.row(KeyboardButton(f"{SIGN_EMOJIS.get(sign)} {local} — today"))
+    if lang == "ru":
+        tail = "гороскоп на сегодня"
+    elif lang == "es":
+        tail = "horóscopo para hoy"
+    else:
+        tail = "horoscope for today"
+
+    kb.row(KeyboardButton(f"{SIGN_EMOJIS.get(sign)} {local} — {tail}"))
     kb.row(KeyboardButton(ui["btn_tarot"]))
     kb.row(KeyboardButton(ui["btn_reminder"]))
     kb.row(KeyboardButton(ui["btn_change_sign"]))
@@ -243,24 +224,60 @@ def build_main_keyboard(sign: str, lang: str):
     return kb
 
 
-def build_time_keyboard(lang: str):
+def kb_time(lang: str):
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     for t in ["07:00", "08:00", "09:00", "10:00", "19:00", "20:00", "21:00"]:
         kb.row(KeyboardButton(t))
-    kb.row(KeyboardButton(UI[lang]["btn_cancel_reminders"]))
+    kb.row(KeyboardButton(UI[lang]["btn_cancel"]))
     kb.row(KeyboardButton(UI[lang]["btn_back"]))
     return kb
+# =======================
+# HELPERS (TEXT PARSE)
+# =======================
+
+ALL_LANG_BUTTONS = {
+    UI["ru"]["btn_lang_ru"], UI["ru"]["btn_lang_en"], UI["ru"]["btn_lang_es"],
+    UI["en"]["btn_lang_ru"], UI["en"]["btn_lang_en"], UI["en"]["btn_lang_es"],
+    UI["es"]["btn_lang_ru"], UI["es"]["btn_lang_en"], UI["es"]["btn_lang_es"],
+}
+
+def parse_lang_from_button(text: str) -> str:
+    if "Рус" in text:
+        return "ru"
+    if "Eng" in text:
+        return "en"
+    return "es"
+
+
+def parse_sign_from_button(text: str, lang: str) -> str | None:
+    # expected: "🐏 Aries" or "🐏 Овен" etc
+    parts = text.split(" ", 1)
+    if len(parts) < 2:
+        return None
+    label = parts[1].strip()
+
+    for s in ZODIAC_SIGNS:
+        if SIGN_NAMES[lang].get(s, s) == label:
+            return s
+    return None
+
+
+# =======================
+# START / LANGUAGE
+# =======================
+
 @dp.message_handler(commands=["start"])
 async def cmd_start(message: types.Message):
-    user = get_user(message.chat.id)
+    chat_id = message.chat.id
+    user = get_user(chat_id)
     lang = user.get("lang")
 
     if lang not in ("ru", "en", "es"):
-        await message.answer("Choose language:", reply_markup=build_lang_keyboard())
+        await message.answer(UI["ru"]["choose_lang"], reply_markup=kb_lang())
         return
 
-    sign = user.get("sign")
     ui = UI[lang]
+    sign = user.get("sign")
 
     if sign:
         await message.answer(
@@ -268,57 +285,113 @@ async def cmd_start(message: types.Message):
                 name=message.from_user.first_name,
                 sign=SIGN_NAMES[lang].get(sign, sign)
             ),
-            reply_markup=build_main_keyboard(sign, lang)
+            reply_markup=kb_main(sign, lang)
         )
     else:
-        await message.answer(ui["start_no_sign"], reply_markup=build_sign_keyboard(lang))
+        await message.answer(ui["start_no_sign"], reply_markup=kb_signs(lang))
+
+
+@dp.message_handler(lambda m: m.text in ALL_LANG_BUTTONS)
+async def set_language(message: types.Message):
+    chat_id = message.chat.id
+    lang = parse_lang_from_button(message.text)
+
+    user = update_user(chat_id, lang=lang)
+    ui = UI[lang]
+    sign = user.get("sign")
+
+    if sign:
+        await message.answer(
+            ui["start_with_sign"].format(
+                name=message.from_user.first_name,
+                sign=SIGN_NAMES[lang].get(sign, sign),
+            ),
+            reply_markup=kb_main(sign, lang),
+        )
+    else:
+        await message.answer(ui["start_no_sign"], reply_markup=kb_signs(lang))
 
 
 @dp.message_handler(lambda m: m.text in {
-    UI["ru"]["btn_lang_ru"],
-    UI["ru"]["btn_lang_en"],
-    UI["ru"]["btn_lang_es"],
+    UI["ru"]["btn_change_lang"],
+    UI["en"]["btn_change_lang"],
+    UI["es"]["btn_change_lang"],
 })
-async def set_language(message: types.Message):
-    lang = "ru" if "Рус" in message.text else "en" if "Eng" in message.text else "es"
-    user = update_user(message.chat.id, lang=lang)
+async def change_language(message: types.Message):
+    await message.answer(UI["ru"]["choose_lang"], reply_markup=kb_lang())
 
-    await message.answer(UI[lang]["start_no_sign"], reply_markup=build_sign_keyboard(lang))
-@dp.message_handler(lambda m: m.text and m.text.startswith(tuple(SIGN_EMOJIS.values())))
+
+# =======================
+# SIGN CHOICE
+# =======================
+
+@dp.message_handler(
+    lambda m: m.text
+    and m.text.startswith(tuple(SIGN_EMOJIS.values()))
+    and "—" not in m.text
+)
 async def choose_sign(message: types.Message):
-    lang = get_user_lang(message.chat.id)
-    label = message.text.split(" ", 1)[1]
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
 
-    sign = next(
-        (s for s in ZODIAC_SIGNS if SIGN_NAMES[lang].get(s) == label),
-        None
-    )
+    sign = parse_sign_from_button(message.text, lang)
     if not sign:
         return
 
-    update_user(message.chat.id, sign=sign)
+    update_user(chat_id, sign=sign)
 
     await message.answer(
         UI[lang]["start_with_sign"].format(
             name=message.from_user.first_name,
-            sign=label
+            sign=SIGN_NAMES[lang].get(sign, sign),
         ),
-        reply_markup=build_main_keyboard(sign, lang)
+        reply_markup=kb_main(sign, lang),
     )
 
 
-@dp.message_handler(lambda m: "—" in m.text)
+@dp.message_handler(lambda m: m.text in {
+    UI["ru"]["btn_change_sign"],
+    UI["en"]["btn_change_sign"],
+    UI["es"]["btn_change_sign"],
+})
+async def change_sign(message: types.Message):
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+    await message.answer(UI[lang]["start_no_sign"], reply_markup=kb_signs(lang))
+
+
+# =======================
+# HOROSCOPE TODAY (button with "—")
+# =======================
+
+@dp.message_handler(
+    lambda m: m.text
+    and m.text.startswith(tuple(SIGN_EMOJIS.values()))
+    and "—" in m.text
+)
 async def horoscope_today(message: types.Message):
-    user = get_user(message.chat.id)
-    sign = user.get("sign")
+    chat_id = message.chat.id
+    user = get_user(chat_id)
     lang = user.get("lang", "ru")
+    sign = user.get("sign")
 
     if not sign:
-        await message.answer(UI[lang]["need_sign"])
+        await message.answer(UI[lang]["need_sign"], reply_markup=kb_signs(lang))
         return
 
-    text = generate(sign, lang)
-    await message.answer(text, reply_markup=build_main_keyboard(sign, lang))
+    try:
+        text = generate(sign, lang)
+    except Exception as e:
+        logger.exception(f"generate() failed chat_id={chat_id}, sign={sign}, lang={lang}: {e}")
+        text = UI[lang]["unknown"]
+
+    await message.answer(text, reply_markup=kb_main(sign, lang))
+
+
+# =======================
+# TAROT
+# =======================
+
 @dp.message_handler(lambda m: m.text in {
     UI["ru"]["btn_tarot"],
     UI["en"]["btn_tarot"],
@@ -328,61 +401,213 @@ async def tarot_handler(message: types.Message):
     chat_id = message.chat.id
     user = get_user(chat_id)
     lang = user.get("lang", "ru")
+    sign = user.get("sign") or ZODIAC_SIGNS[0]
 
-    result = draw_tarot_for_user(chat_id, lang)
+    try:
+        result = draw_tarot_for_user(chat_id, lang)
+    except Exception as e:
+        logger.exception(f"draw_tarot_for_user failed chat_id={chat_id}: {e}")
+        await message.answer(UI[lang]["unknown"], reply_markup=kb_main(sign, lang))
+        return
 
-    text = result.get("text")
-    image = result.get("image_path")
+    text = ""
+    image_name = None
+
+    # allow dict or string
+    if isinstance(result, dict):
+        text = result.get("text", "") or ""
+        image_name = (
+            result.get("image_path")
+            or result.get("image")
+            or result.get("image_file")
+            or result.get("filename")
+        )
+    else:
+        text = str(result)
 
     update_user(chat_id, tarot_last_date=datetime.now(TZ).isoformat())
 
-    if image:
-        await bot.send_photo(chat_id, types.InputFile(TAROT_IMAGES_DIR / image), caption=text)
-    else:
-        await message.answer(text)
+    if image_name:
+        img_path = TAROT_IMAGES_DIR / image_name
+        if img_path.exists():
+            try:
+                await bot.send_photo(
+                    chat_id,
+                    photo=types.InputFile(img_path),
+                    caption=text or None,
+                    reply_markup=kb_main(sign, lang),
+                )
+                return
+            except Exception as e:
+                logger.exception(f"send_photo tarot failed chat_id={chat_id}: {e}")
+
+    await message.answer(text or UI[lang]["unknown"], reply_markup=kb_main(sign, lang))
+
+
+# =======================
+# REMINDERS UI
+# =======================
+
 @dp.message_handler(lambda m: m.text in {
     UI["ru"]["btn_reminder"],
     UI["en"]["btn_reminder"],
     UI["es"]["btn_reminder"],
 })
 async def reminder_button(message: types.Message):
-    lang = get_user_lang(message.chat.id)
-    await message.answer(
-        UI[lang]["reminder_prompt"],
-        reply_markup=build_time_keyboard(lang)
-    )
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+    await message.answer(UI[lang]["reminder_prompt"], reply_markup=kb_time(lang))
 
 
-@dp.message_handler(lambda m: ":" in m.text and len(m.text) == 5)
+@dp.message_handler(lambda m: m.text in {
+    UI["ru"]["btn_cancel"],
+    UI["en"]["btn_cancel"],
+    UI["es"]["btn_cancel"],
+})
+async def reminder_cancel(message: types.Message):
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+    user = update_user(chat_id, reminder_time=None)
+    sign = user.get("sign")
+
+    if sign:
+        await message.answer(UI[lang]["unknown"], reply_markup=kb_main(sign, lang))
+    else:
+        await message.answer(UI[lang]["start_no_sign"], reply_markup=kb_signs(lang))
+
+
+@dp.message_handler(lambda m: m.text in {
+    UI["ru"]["btn_back"],
+    UI["en"]["btn_back"],
+    UI["es"]["btn_back"],
+})
+async def back_to_menu(message: types.Message):
+    chat_id = message.chat.id
+    user = get_user(chat_id)
+    lang = user.get("lang", "ru")
+    sign = user.get("sign")
+
+    if sign:
+        await message.answer("OK", reply_markup=kb_main(sign, lang))
+    else:
+        await message.answer(UI[lang]["start_no_sign"], reply_markup=kb_signs(lang))
+
+
+@dp.message_handler(
+    lambda m: m.text
+    and ":" in m.text
+    and len(m.text.strip()) == 5
+    and m.text.replace(":", "").isdigit()
+)
 async def reminder_time(message: types.Message):
-    update_user(message.chat.id, reminder_time=message.text)
-    lang = get_user_lang(message.chat.id)
-    await message.answer(
-        UI[lang]["reminder_set"].format(time=message.text)
-    )
-async def send_daily_horoscopes():
-    while True:
-        now = datetime.now(TZ).strftime("%H:%M")
-        with get_db() as conn:
-            users = conn.execute(
-                "SELECT chat_id, sign, lang FROM users WHERE reminder_time = ?",
-                (now,)
-            ).fetchall()
+    chat_id = message.chat.id
+    lang = get_user_lang(chat_id)
+    user = get_user(chat_id)
+    sign = user.get("sign")
 
-        for u in users:
-            try:
-                text = generate(u["sign"], u["lang"])
-                await bot.send_message(u["chat_id"], text)
-            except Exception as e:
-                logger.error(e)
+    time_str = message.text.strip()
+
+    # validate HH:MM range
+    try:
+        hh, mm = time_str.split(":")
+        hh_i = int(hh)
+        mm_i = int(mm)
+        if not (0 <= hh_i <= 23 and 0 <= mm_i <= 59):
+            raise ValueError("range")
+    except Exception:
+        await message.answer(UI[lang]["unknown"], reply_markup=kb_time(lang))
+        return
+
+    update_user(chat_id, reminder_time=f"{hh_i:02d}:{mm_i:02d}")
+
+    if sign:
+        await message.answer(
+            UI[lang]["reminder_set"].format(time=f"{hh_i:02d}:{mm_i:02d}"),
+            reply_markup=kb_main(sign, lang),
+        )
+    else:
+        await message.answer(
+            UI[lang]["reminder_set"].format(time=f"{hh_i:02d}:{mm_i:02d}"),
+            reply_markup=kb_signs(lang),
+        )
+
+
+# =======================
+# FALLBACK
+# =======================
+
+@dp.message_handler()
+async def fallback(message: types.Message):
+    chat_id = message.chat.id
+    user = get_user(chat_id)
+    lang = user.get("lang", "ru")
+    sign = user.get("sign")
+
+    if sign:
+        await message.answer(UI[lang]["unknown"], reply_markup=kb_main(sign, lang))
+    else:
+        await message.answer(UI[lang]["unknown"], reply_markup=kb_signs(lang))
+# =======================
+# DAILY SCHEDULER
+# =======================
+
+async def send_daily_horoscopes():
+    """
+    Каждую минуту проверяет пользователей с reminder_time == текущему HH:MM
+    и отправляет гороскоп.
+    """
+    logger.info("Daily scheduler started")
+    while True:
+        try:
+            now_hhmm = datetime.now(TZ).strftime("%H:%M")
+
+            with get_db() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT chat_id, sign, lang
+                    FROM users
+                    WHERE reminder_time = ?
+                      AND sign IS NOT NULL
+                    """,
+                    (now_hhmm,),
+                ).fetchall()
+
+            for r in rows:
+                try:
+                    text = generate(r["sign"], r["lang"])
+                    await bot.send_message(r["chat_id"], text)
+                except Exception as e:
+                    logger.exception(
+                        f"Failed to send daily horoscope chat_id={r['chat_id']}: {e}"
+                    )
+
+        except Exception as loop_err:
+            logger.exception(f"Scheduler loop error: {loop_err}")
 
         await asyncio.sleep(60)
 
 
-async def on_startup(dp):
-    asyncio.create_task(send_daily_horoscopes())
-    logger.info("AstroBot started (SQLite + Render Disk)")
+# =======================
+# STARTUP / SHUTDOWN
+# =======================
 
+async def on_startup(dp: Dispatcher):
+    logger.info("AstroBot starting (SQLite + Render Disk)")
+    asyncio.create_task(send_daily_horoscopes())
+
+
+async def on_shutdown(dp: Dispatcher):
+    logger.info("AstroBot shutdown")
+
+
+# =======================
+# MAIN
+# =======================
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+    executor.start_polling(
+        dp,
+        skip_updates=True,
+        on_startup=on_startup,
+        on_shutdown=on_shutdown,
+    )
