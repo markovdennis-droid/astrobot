@@ -1,6 +1,21 @@
-import os
-import logging
+# =======================
+# EVENT LOOP FIX (Render + uvicorn + aiogram 2.x)
+# =======================
+
 import asyncio
+
+# ❗️ВАЖНО:
+# uvicorn[standard] тянет uvloop, который ломает aiogram 2.x на Python 3.11
+# Принудительно возвращаем стандартный event loop
+asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+
+# =======================
+# STANDARD IMPORTS
+# =======================
+
+import os
+import json
+import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +24,7 @@ from typing import Dict, Any
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
+
 
 from generator import (
     generate,
